@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafafa;
+  --foreground: #18181b;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --surface: #ffffff;
+  --accent: #166534;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: var(--background); }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; }
+button, select { cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
+::selection { color: #14532d; background: #dcfce7; }
+* { scrollbar-color: #d4d4d8 #fafafa; scrollbar-width: thin; }
+
+.app-frame { min-height: 100vh; }
+.sidebar { width: 240px; flex: 0 0 240px; }
+.workspace { min-width: 0; flex: 1; }
+.topbar { height: 56px; }
+.page-width { width: min(100%, 1440px); margin: 0 auto; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.table-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
+.timesheet-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
+.timesheet-grid { min-width: 1040px; }
+.drawer-overlay { position: fixed; inset: 0; z-index: 50; background: rgb(24 24 27 / 25%); }
+.drawer-content { position: fixed; z-index: 51; top: 0; right: 0; height: 100dvh; width: min(520px, 100vw); overflow-y: auto; border-left: 1px solid var(--line); background: white; box-shadow: -16px 0 40px rgb(24 24 27 / 10%); }
+.dialog-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgb(24 24 27 / 32%); }
+.dialog-content { position: relative; width: min(520px, 100%); max-height: min(90dvh, 760px); overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: white; box-shadow: 0 20px 60px rgb(24 24 27 / 18%); }
+.field-input, .field-select { margin-top: 6px; display: block; width: 100%; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: white; padding: 0 10px; color: #27272a; font-size: 12px; outline: none; }
+.field-input:focus, .field-select:focus { border-color: #15803d; }
+
+@media (max-width: 900px) {
+  .sidebar { width: 68px; flex-basis: 68px; }
+  .sidebar-label, .brand-copy, .sidebar-section-label { display: none; }
+}
+@media (max-width: 680px) {
+  .sidebar { display: none; }
+  .topbar { height: auto; min-height: 56px; flex-wrap: wrap; gap: 8px; padding-block: 8px; }
+  .topbar > div { width: 100%; justify-content: space-between; }
+  .page-width { padding-inline: 16px !important; }
+}

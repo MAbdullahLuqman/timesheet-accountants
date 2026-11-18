@@ -1,0 +1,32 @@
+{
+  "title": "Choose the visual direction",
+  "question": "The concept roll ran in degraded mode and returned one direction without challengers. Keep the assigned direction, choose the familiar category standard, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "kind": "assigned",
+      "label": "Islamabad Tax Circulars",
+      "kicker": "THE ROLL",
+      "lineage": "Pakistan tax circulars and formal firm notices",
+      "thesis": "A familiar accounting app gains its character from the precise rhythm of professional tax documents.",
+      "palette": ["#ffffff", "#fafafa", "#27272a", "#166534", "#b45309", "#be123c"],
+      "materials": ["crisp sans-serif type", "fine zinc rules", "tabular numerals"],
+      "viewport": "A compact app header and side navigation frame the Monday–Saturday timesheet matrix, with client, engagement, and Pakistan task codes beside quarter-hour cells and daily totals.",
+      "risk": "Formal typography can feel generic if task codes and time-entry states lose their hierarchy.",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [{"label": "side navigation", "x": 0, "y": 0, "w": 2, "h": 10}, {"label": "sticky header and timer", "x": 2, "y": 0, "w": 10, "h": 1}, {"label": "week context and status", "x": 2, "y": 1, "w": 10, "h": 2, "accent": true}, {"label": "timesheet matrix and totals", "x": 2, "y": 3, "w": 10, "h": 7}]}
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code", "toggle": true},
+  "canon": true,
+  "canonCard": {
+    "kind": "canon",
+    "label": "The category standard",
+    "thesis": "A polished accounting workspace with the expected tables, filters, and navigation.",
+    "palette": ["#ffffff", "#111827", "#2563eb"],
+    "materials": ["clean grid", "product typography"],
+    "viewport": "A compact sidebar and top bar frame a weekly timesheet table with clear totals and submission actions.",
+    "risk": "It follows familiar accounting software conventions throughout.",
+    "wireframe": {"cols": 12, "rows": 10, "regions": [{"label": "side navigation", "x": 0, "y": 0, "w": 2, "h": 10}, {"label": "header", "x": 2, "y": 0, "w": 10, "h": 1}, {"label": "weekly timesheet table", "x": 2, "y": 1, "w": 10, "h": 9, "accent": true}]}
+  }
+}
