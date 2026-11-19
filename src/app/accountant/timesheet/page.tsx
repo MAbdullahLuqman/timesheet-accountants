@@ -1,1 +1,1 @@
-export { default } from "../../timesheet/page";
+export { default } from "./timesheet";
