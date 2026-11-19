@@ -18,13 +18,12 @@ export default function LoginForm() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (signInError) {
       setError(signInError.message);
       setLoading(false);
       return;
     }
-    const { data: { user } } = await supabase.auth.getUser();
     const { data: profile } = user ? await supabase.from("profiles").select("role,is_active").eq("id", user.id).maybeSingle() : { data: null };
     const target = profile?.role === "PARTNER" ? "/partner/review" : "/accountant/timesheet";
     const mismatch = portal === "partner" ? profile?.role !== "PARTNER" : !profile || !["STAFF", "HEAD"].includes(profile.role);

@@ -28,7 +28,7 @@ export async function createStaffUser(formData: FormData) {
     await admin.auth.admin.deleteUser(created.user.id);
     return { error: profileError.message };
   }
-  revalidatePath("/team");
+  revalidatePath("/partner/users");
   return { success: true };
 }
 
@@ -45,7 +45,7 @@ export async function toggleUserActiveStatus(userId: string, nextActiveState: bo
     await admin.from("profiles").update({ is_active: !nextActiveState }).eq("id", userId).eq("firm_id", profile.firm_id);
     return { error: authError.message };
   }
-  revalidatePath("/team");
+  revalidatePath("/partner/users");
   return { success: true };
 }
 
@@ -57,6 +57,6 @@ export async function resetStaffPassword(userId: string, newPassword: string) {
   if (!target) return { error: "This user is not in your firm." };
   const { error } = await createAdminClient().auth.admin.updateUserById(userId, { password: newPassword });
   if (error) return { error: error.message };
-  revalidatePath("/team");
+  revalidatePath("/partner/users");
   return { success: true };
 }

@@ -144,9 +144,10 @@ export async function saveTimeEntries(items: TimeEntryInput[]) {
     const { error } = await supabase.from("time_entries").upsert(records, { onConflict: "id" });
     if (error) return bad(error.message);
   }
-  revalidatePath("/timesheet");
-  revalidatePath("/approvals");
-  revalidatePath("/engagements");
+  revalidatePath("/accountant/timesheet");
+  revalidatePath("/partner/review");
+  revalidatePath("/accountant/engagements");
+  revalidatePath("/partner/engagements");
   return { success: true };
 }
 
@@ -157,8 +158,8 @@ export async function submitWeek(start: string, end: string) {
   const { data, error } = await supabase.from("time_entries").update({ status: "SUBMITTED" }).eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).in("status", ["DRAFT", "RETURNED"]).select("id");
   if (error) return bad(error.message);
   if (!data?.length) return bad("There are no draft or returned entries to submit for this week.");
-  revalidatePath("/timesheet");
-  revalidatePath("/approvals");
+  revalidatePath("/accountant/timesheet");
+  revalidatePath("/partner/review");
   return { success: true };
 }
 
@@ -175,7 +176,7 @@ export async function logTimerEntry(input: { id: string; engagementId: string; t
   }
   const { error } = await supabase.from("time_entries").insert({ id: input.id, firm_id: profile.firm_id, user_id: user.id, engagement_id: input.engagementId, task_code: input.taskCode, work_date: input.workDate, logged_hours: input.loggedHours, billed_hours: 0, billable: input.taskCode !== "Exam Leave / Admin", notes: "Timed work · add a summary", status: "DRAFT" });
   if (error) return bad(error.message);
-  revalidatePath("/timesheet");
+  revalidatePath("/accountant/timesheet");
   return { success: true };
 }
 
@@ -193,9 +194,9 @@ export async function reviewTimeEntry(input: { id: string; action: "approve" | "
   if (profile.role === "HEAD" && (!engagement || engagement.department_id !== profile.department_id || owner?.department_id !== profile.department_id)) return bad("This entry is outside your department.");
   const { data: updated, error: updateError } = await supabase.from("time_entries").update({ status: input.action === "approve" ? "APPROVED" : "RETURNED", billed_hours: input.billedHours, review_comment: input.action === "return" ? input.comment!.trim() : null, reviewed_by: user.id }).eq("id", input.id).eq("firm_id", profile.firm_id).eq("status", "SUBMITTED").select("id").maybeSingle();
   if (updateError || !updated) return bad(updateError?.message ?? "This entry was already reviewed.");
-  revalidatePath("/approvals");
-  revalidatePath("/timesheet");
-  revalidatePath("/reports");
+  revalidatePath("/partner/review");
+  revalidatePath("/accountant/timesheet");
+  revalidatePath("/partner/reports");
   return { success: true };
 }
 
@@ -209,8 +210,9 @@ export async function createEngagement(input: { department_id: string | null; cl
   if (!department) return bad("That department is not in your firm.");
   const { error } = await supabase.from("engagements").insert({ firm_id: profile.firm_id, department_id: departmentId, client_name: input.client_name.trim(), ntn_strn: input.ntn_strn.trim(), title: input.title.trim(), billing_model: input.billing_model, budget_hours: input.budget_hours, fee_pkr: input.fee_pkr, status: "ACTIVE" });
   if (error) return bad(error.message);
-  revalidatePath("/engagements");
-  revalidatePath("/timesheet");
+  revalidatePath("/partner/engagements");
+  revalidatePath("/accountant/engagements");
+  revalidatePath("/accountant/timesheet");
   return { success: true };
 }
 
@@ -222,6 +224,7 @@ export async function setEngagementStatus(id: string, status: EngagementStatus) 
   if (profile.role === "HEAD") query = query.eq("department_id", profile.department_id);
   const { data, error } = await query.select("id").maybeSingle();
   if (error || !data) return bad(error?.message ?? "That engagement is outside your department.");
-  revalidatePath("/engagements");
+  revalidatePath("/partner/engagements");
+  revalidatePath("/accountant/engagements");
   return { success: true };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { BriefcaseBusiness, Filter, Plus, Search } from "lucide-react";
 import { Badge, Button, Modal } from "@/components/ui";
 import { createEngagement, setEngagementStatus } from "@/lib/supabase/actions";
@@ -13,19 +14,20 @@ const statusTone = (status: EngagementStatus) => status === "ACTIVE" ? "green" :
 const modelLabel: Record<BillingModel, string> = { RETAINER: "Monthly retainer", FIXED: "Fixed fee", HOURLY: "Hourly" };
 
 export default function EngagementList({ rows, departments, canManage, canSeeFees, firmWide }: { rows: Row[]; departments: Department[]; canManage: boolean; canSeeFees: boolean; firmWide: boolean }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All departments");
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [pending, startTransition] = useTransition();
   const filtered = useMemo(() => rows.filter((row) => (department === "All departments" || row.department_name === department) && `${row.client_name} ${row.title} ${row.ntn_strn}`.toLowerCase().includes(search.toLowerCase())), [rows, department, search]);
-  const run = (task: () => Promise<{ error: string } | { success: boolean }>, success: string) => startTransition(async () => { const result = await task(); setNotice("error" in result ? result.error : success); });
+  const run = (task: () => Promise<{ error: string } | { success: boolean }>, success: string) => startTransition(async () => { const result = await task(); setNotice("error" in result ? result.error : success); if ("success" in result) router.refresh(); });
   const submit = (form: FormData) => {
     const departmentId = String(form.get("department_id") ?? "") || null;
     startTransition(async () => {
       const result = await createEngagement({ department_id: departmentId, client_name: String(form.get("client_name") ?? ""), ntn_strn: String(form.get("ntn_strn") ?? ""), title: String(form.get("title") ?? ""), billing_model: String(form.get("billing_model") ?? "RETAINER") as BillingModel, budget_hours: Number(form.get("budget_hours")), fee_pkr: Number(form.get("fee_pkr")) });
       setNotice("error" in result ? result.error : "Engagement created.");
-      if (!("error" in result)) setOpen(false);
+      if (!("error" in result)) { setOpen(false); router.refresh(); }
     });
   };
 

@@ -1,9 +1,10 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Department, Firm, Profile, Role } from "@/lib/supabase/types";
 
-export async function getSignedInProfile() {
+export const getSignedInProfile = cache(async function getSignedInProfile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -38,7 +39,7 @@ export async function getSignedInProfile() {
       firm: firmResult.data as Firm,
     } satisfies Profile,
   };
-}
+});
 
 export async function requireProfile(roles?: Role[]) {
   const session = await getSignedInProfile();

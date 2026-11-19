@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, KeyRound, Plus, Search, Shield, Users } from "lucide-react";
 import { Avatar, Badge, Button, Modal, PageHeading } from "@/components/ui";
@@ -12,6 +13,7 @@ type Department = { id: string; name: string; firm_id: string };
 const column = createColumnHelper<Person>();
 
 export default function TeamAdmin({ people, departments }: { people: Person[]; departments: Department[] }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "full_name", desc: false }]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -19,7 +21,7 @@ export default function TeamAdmin({ people, departments }: { people: Person[]; d
   const [notice, setNotice] = useState("");
   const [pending, startTransition] = useTransition();
   const rows = useMemo(() => people.filter((person) => `${person.full_name} ${person.email} ${person.role} ${person.department_name}`.toLowerCase().includes(search.toLowerCase())), [people, search]);
-  const act = (task: () => Promise<{ error?: string; success?: boolean }>, success: string) => startTransition(async () => { const result = await task(); setNotice(result.error ?? success); });
+  const act = (task: () => Promise<{ error?: string; success?: boolean }>, success: string) => startTransition(async () => { const result = await task(); setNotice(result.error ?? success); if (result.success) router.refresh(); });
   const columns = useMemo(() => [
     column.accessor("full_name", { header: "Team member", cell: ({ row, getValue }) => <div className="flex items-center gap-2.5"><Avatar name={getValue()} /><div><p className="text-[10px] font-medium">{getValue()}</p><p className="text-[9px] text-zinc-500">{row.original.email}</p></div></div> }),
     column.accessor("role", { header: "Role", cell: ({ getValue }) => <Badge>{getValue()}</Badge> }),
@@ -37,7 +39,7 @@ export default function TeamAdmin({ people, departments }: { people: Person[]; d
     startTransition(async () => {
       const result = await createStaffUser(form);
       setNotice(result.error ?? "User account created.");
-      if (!("error" in result)) setCreateOpen(false);
+      if (!("error" in result)) { setCreateOpen(false); router.refresh(); }
     });
   }
   function submitPassword(event: FormEvent<HTMLFormElement>) {
@@ -48,7 +50,7 @@ export default function TeamAdmin({ people, departments }: { people: Person[]; d
     startTransition(async () => {
       const result = await resetStaffPassword(person.id, password);
       setNotice(result.error ?? "Password reset.");
-      if (!("error" in result)) setResetPerson(null);
+      if (!("error" in result)) { setResetPerson(null); router.refresh(); }
     });
   }
 
