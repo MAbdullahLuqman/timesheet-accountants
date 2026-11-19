@@ -1,0 +1,53 @@
+export type Role = "PARTNER" | "HEAD" | "STAFF";
+export type BillingModel = "RETAINER" | "FIXED" | "HOURLY";
+export type EntryStatus = "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED";
+export type EngagementStatus = "ACTIVE" | "ON_HOLD" | "CLOSED";
+
+export type Department = { id: string; name: string; firm_id: string };
+export type Firm = { id: string; name: string };
+export type Profile = {
+  id: string;
+  firm_id: string;
+  department_id: string | null;
+  full_name: string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  cost_rate_pkr: number;
+  bill_rate_pkr: number;
+  weekly_target_hrs: number;
+  department: Department | null;
+  firm: Firm;
+};
+export type Engagement = {
+  id: string;
+  firm_id: string;
+  department_id: string | null;
+  client_name: string;
+  ntn_strn: string;
+  title: string;
+  billing_model: BillingModel;
+  budget_hours: number;
+  fee_pkr: number;
+  status: EngagementStatus;
+  department?: Department | null;
+  logged_hours?: number;
+  billed_hours?: number;
+};
+export type TimeEntry = {
+  id: string;
+  firm_id: string;
+  user_id: string;
+  engagement_id: string;
+  task_code: string;
+  work_date: string;
+  logged_hours: number;
+  billed_hours: number;
+  billable: boolean;
+  notes: string;
+  status: EntryStatus;
+  review_comment: string | null;
+  reviewed_by: string | null;
+  engagement?: Engagement;
+  profile?: Pick<Profile, "id" | "full_name" | "email" | "department_id" | "role">;
+};
