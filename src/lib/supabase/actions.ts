@@ -132,7 +132,7 @@ export async function saveTimeEntries(items: TimeEntryInput[]) {
   for (const item of items) {
     if (!/^[0-9a-f-]{36}$/i.test(item.id) || !item.engagement_id || !taskCodes.includes(item.task_code) || !/^\d{4}-\d{2}-\d{2}$/.test(item.work_date) || !quarterHour(item.logged_hours) || typeof item.notes !== "string" || item.notes.length > 1000 || typeof item.billable !== "boolean") return bad("Check the entry, date, task code, notes, and 15-minute hour increments.");
     const { data: engagement, error: engagementError } = await supabase.from("engagements").select("id,department_id").eq("id", item.engagement_id).eq("firm_id", profile.firm_id).eq("status", "ACTIVE").maybeSingle();
-    if (engagementError || !engagement || (profile.role !== "PARTNER" && engagement.department_id !== profile.department_id)) return bad("That engagement is outside your available assignments.");
+    if (engagementError || !engagement) return bad("That engagement is outside your firm or inactive.");
   }
   const ids = items.map((item) => item.id);
   if (new Set(ids).size !== ids.length) return bad("Duplicate timesheet entry IDs.");
@@ -168,7 +168,7 @@ export async function logTimerEntry(input: { id: string; engagementId: string; t
   if (!input || !/^[0-9a-f-]{36}$/i.test(input.id) || !/^\d{4}-\d{2}-\d{2}$/.test(input.workDate) || !quarterHour(input.loggedHours) || input.loggedHours === 0 || !taskCodes.includes(input.taskCode)) return bad("Timer entry, date, task code, or rounded duration is invalid.");
   const supabase = await createClient();
   const { data: engagement } = await supabase.from("engagements").select("id,department_id").eq("id", input.engagementId).eq("firm_id", profile.firm_id).eq("status", "ACTIVE").maybeSingle();
-  if (!engagement || (profile.role !== "PARTNER" && engagement.department_id !== profile.department_id)) return bad("That engagement is outside your available assignments.");
+  if (!engagement) return bad("That engagement is outside your firm or inactive.");
   const { data: previous } = await supabase.from("time_entries").select("id,user_id,firm_id,engagement_id,task_code,work_date,logged_hours,status").eq("id", input.id).maybeSingle();
   if (previous) {
     const matches = previous.user_id === user.id && previous.firm_id === profile.firm_id && previous.status === "DRAFT" && previous.engagement_id === input.engagementId && previous.task_code === input.taskCode && previous.work_date === input.workDate && Number(previous.logged_hours) === input.loggedHours;
