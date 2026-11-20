@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAccountant, requirePartner } from "@/lib/auth/guards";
@@ -9,6 +9,7 @@ import type { BillingModel, EngagementStatus } from "@/lib/supabase/types";
 export type TimeEntryInput = {
   id: string;
   engagement_id: string;
+  task_id?: string | null;
   task_code: string;
   work_date: string;
   logged_hours: number;
@@ -18,12 +19,17 @@ export type TimeEntryInput = {
 const quarterHour = (value: number) => Number.isFinite(value) && value >= 0 && value <= 24 && Math.abs(value * 4 - Math.round(value * 4)) < 0.00001;
 const bad = (error: string) => ({ error });
 const taskCodes = ["FBR Income Tax / IRIS", "Sales Tax / SRB / PRA", "WHT Reconciliation", "Statutory Audit", "SECP Filing", "Bookkeeping", "Exam Leave / Admin"];
+async function lockedThrough(firmId: string) {
+  const { data, error } = await createAdminClient().from("period_locks").select("locked_through_date").eq("firm_id", firmId).order("locked_through_date", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data?.locked_through_date as string | undefined;
+}
 
 export async function getTimesheetData(start: string, end: string) {
   const { user, profile } = await requireAccountant();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return { error: "Invalid week range." };
   const supabase = await createClient();
-  const { data, error } = await supabase.from("time_entries").select("id,firm_id,user_id,engagement_id,task_code,work_date,logged_hours,billed_hours,billable,notes,status,review_comment,reviewed_by").eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).order("work_date");
+  const { data, error } = await supabase.from("time_entries").select("id,firm_id,user_id,engagement_id,task_id,task_code,work_date,logged_hours,billed_hours,billable,notes,status,review_comment,reviewed_by").eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).order("work_date");
   return error ? bad(error.message) : { data: data ?? [] };
 }
 
@@ -128,18 +134,24 @@ export async function getReportsData(start: string, end: string) {
 export async function saveTimeEntries(items: TimeEntryInput[]) {
   const { user, profile } = await requireAccountant();
   if (!Array.isArray(items) || items.length > 200) return bad("Invalid timesheet submission.");
+  const lock = await lockedThrough(profile.firm_id);
+  if (lock && items.some((item) => item.work_date <= lock)) return bad("Accounting period locked by Managing Partner.");
   const supabase = await createClient();
   for (const item of items) {
     if (!/^[0-9a-f-]{36}$/i.test(item.id) || !item.engagement_id || !taskCodes.includes(item.task_code) || !/^\d{4}-\d{2}-\d{2}$/.test(item.work_date) || !quarterHour(item.logged_hours) || typeof item.notes !== "string" || item.notes.length > 1000 || typeof item.billable !== "boolean") return bad("Check the entry, date, task code, notes, and 15-minute hour increments.");
     const { data: engagement, error: engagementError } = await supabase.from("engagements").select("id,department_id").eq("id", item.engagement_id).eq("firm_id", profile.firm_id).eq("status", "ACTIVE").maybeSingle();
     if (engagementError || !engagement) return bad("That engagement is outside your firm or inactive.");
+    if (item.task_id) {
+      const { data: task } = await supabase.from("engagement_tasks").select("id").eq("id", item.task_id).eq("engagement_id", item.engagement_id).eq("firm_id", profile.firm_id).neq("stage", "DONE").maybeSingle();
+      if (!task) return bad("Choose an open task for this engagement.");
+    }
   }
   const ids = items.map((item) => item.id);
   if (new Set(ids).size !== ids.length) return bad("Duplicate timesheet entry IDs.");
   const { data: existing, error: existingError } = await supabase.from("time_entries").select("id,user_id,status").eq("firm_id", profile.firm_id).in("id", ids);
   if (existingError) return bad(existingError.message);
   if ((existing ?? []).some((row) => row.user_id !== user.id || !["DRAFT", "RETURNED"].includes(row.status))) return bad("One or more entries are locked or belong to another user.");
-  const records = items.map((item) => ({ id: item.id, firm_id: profile.firm_id, user_id: user.id, engagement_id: item.engagement_id, task_code: item.task_code.trim(), work_date: item.work_date, logged_hours: item.logged_hours, billed_hours: 0, billable: item.billable, notes: item.notes.trim(), status: "DRAFT", review_comment: null, reviewed_by: null }));
+  const records = items.map((item) => ({ id: item.id, firm_id: profile.firm_id, user_id: user.id, engagement_id: item.engagement_id, task_id: item.task_id ?? null, task_code: item.task_code.trim(), work_date: item.work_date, logged_hours: item.logged_hours, billed_hours: 0, billable: item.billable, notes: item.notes.trim(), status: "DRAFT", review_comment: null, reviewed_by: null }));
   if (records.length) {
     const { error } = await supabase.from("time_entries").upsert(records, { onConflict: "id" });
     if (error) return bad(error.message);
@@ -148,24 +160,31 @@ export async function saveTimeEntries(items: TimeEntryInput[]) {
   revalidatePath("/partner/review");
   revalidatePath("/accountant/engagements");
   revalidatePath("/partner/engagements");
+  revalidateTag(`firm:${profile.firm_id}:reports`);
+  revalidateTag(`firm:${profile.firm_id}:tasks`);
   return { success: true };
 }
 
 export async function submitWeek(start: string, end: string) {
   const { user, profile } = await requireAccountant();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return bad("Invalid week range.");
+  const lock = await lockedThrough(profile.firm_id);
+  if (lock && start <= lock) return bad("Accounting period locked by Managing Partner.");
   const supabase = await createClient();
   const { data, error } = await supabase.from("time_entries").update({ status: "SUBMITTED" }).eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).in("status", ["DRAFT", "RETURNED"]).select("id");
   if (error) return bad(error.message);
   if (!data?.length) return bad("There are no draft or returned entries to submit for this week.");
   revalidatePath("/accountant/timesheet");
   revalidatePath("/partner/review");
+  revalidateTag(`firm:${profile.firm_id}:reports`);
   return { success: true };
 }
 
 export async function logTimerEntry(input: { id: string; engagementId: string; taskCode: string; workDate: string; loggedHours: number }) {
   const { user, profile } = await requireAccountant();
   if (!input || !/^[0-9a-f-]{36}$/i.test(input.id) || !/^\d{4}-\d{2}-\d{2}$/.test(input.workDate) || !quarterHour(input.loggedHours) || input.loggedHours === 0 || !taskCodes.includes(input.taskCode)) return bad("Timer entry, date, task code, or rounded duration is invalid.");
+  const lock = await lockedThrough(profile.firm_id);
+  if (lock && input.workDate <= lock) return bad("Accounting period locked by Managing Partner.");
   const supabase = await createClient();
   const { data: engagement } = await supabase.from("engagements").select("id,department_id").eq("id", input.engagementId).eq("firm_id", profile.firm_id).eq("status", "ACTIVE").maybeSingle();
   if (!engagement) return bad("That engagement is outside your firm or inactive.");
@@ -177,14 +196,15 @@ export async function logTimerEntry(input: { id: string; engagementId: string; t
   const { error } = await supabase.from("time_entries").insert({ id: input.id, firm_id: profile.firm_id, user_id: user.id, engagement_id: input.engagementId, task_code: input.taskCode, work_date: input.workDate, logged_hours: input.loggedHours, billed_hours: 0, billable: input.taskCode !== "Exam Leave / Admin", notes: "Timed work · add a summary", status: "DRAFT" });
   if (error) return bad(error.message);
   revalidatePath("/accountant/timesheet");
+  revalidateTag(`firm:${profile.firm_id}:tasks`);
   return { success: true };
 }
 
-export async function reviewTimeEntry(input: { id: string; action: "approve" | "return"; billedHours: number; comment?: string }) {
+export async function reviewTimeEntry(input: { id: string; action: "approve" | "return"; billedHours: number; comment?: string; bulk?: boolean }) {
   const { user, profile } = await requirePartner();
   if (!input || !input.id || !["approve", "return"].includes(input.action) || !quarterHour(input.billedHours) || input.action === "return" && (typeof input.comment !== "string" || !input.comment.trim() || input.comment.length > 1000)) return bad("Enter valid billed hours and a comment when returning an entry.");
   const supabase = await createClient();
-  const { data: entry, error } = await supabase.from("time_entries").select("id,user_id,engagement_id,logged_hours,status").eq("id", input.id).eq("firm_id", profile.firm_id).eq("status", "SUBMITTED").maybeSingle();
+  const { data: entry, error } = await supabase.from("time_entries").select("id,user_id,engagement_id,logged_hours,billed_hours,status").eq("id", input.id).eq("firm_id", profile.firm_id).eq("status", "SUBMITTED").maybeSingle();
   if (error || !entry) return bad("This entry is no longer awaiting review.");
   if (input.billedHours > Number(entry.logged_hours)) return bad("Billed hours cannot exceed logged hours.");
   const [{ data: engagement }, { data: owner }] = await Promise.all([
@@ -194,13 +214,20 @@ export async function reviewTimeEntry(input: { id: string; action: "approve" | "
   if (profile.role === "HEAD" && (!engagement || engagement.department_id !== profile.department_id || owner?.department_id !== profile.department_id)) return bad("This entry is outside your department.");
   const { data: updated, error: updateError } = await supabase.from("time_entries").update({ status: input.action === "approve" ? "APPROVED" : "RETURNED", billed_hours: input.billedHours, review_comment: input.action === "return" ? input.comment!.trim() : null, reviewed_by: user.id }).eq("id", input.id).eq("firm_id", profile.firm_id).eq("status", "SUBMITTED").select("id").maybeSingle();
   if (updateError || !updated) return bad(updateError?.message ?? "This entry was already reviewed.");
+  const auditAction = input.action === "return" ? "RETURN" : input.bulk ? "BULK_APPROVE" : input.billedHours < Number(entry.logged_hours) ? "WRITEDOWN" : "APPROVE";
+  const { error: auditError } = await createAdminClient().from("time_entry_audits").insert({ firm_id: profile.firm_id, time_entry_id: input.id, actor_id: user.id, action: auditAction, old_billed_hours: entry.billed_hours, new_billed_hours: input.billedHours, comment: input.action === "return" ? input.comment!.trim() : null });
+  if (auditError) {
+    await createAdminClient().from("time_entries").update({ status: "SUBMITTED", billed_hours: entry.billed_hours, review_comment: null, reviewed_by: null }).eq("id", input.id).eq("firm_id", profile.firm_id).eq("reviewed_by", user.id);
+    return bad(`Review was not recorded because its audit entry failed: ${auditError.message}`);
+  }
   revalidatePath("/partner/review");
   revalidatePath("/accountant/timesheet");
   revalidatePath("/partner/reports");
+  revalidateTag(`firm:${profile.firm_id}:reports`);
   return { success: true };
 }
 
-export async function createEngagement(input: { department_id: string | null; client_name: string; ntn_strn: string; title: string; billing_model: BillingModel; budget_hours: number; fee_pkr: number }) {
+export async function createEngagement(input: { department_id: string | null; client_name: string; ntn_strn: string; title: string; billing_model: BillingModel; budget_hours: number; fee_pkr: number; due_date?: string | null; service_type?: "TAX" | "AUDIT" | "CORPORATE" | "OTHER"; auto_seed?: boolean }) {
   const { profile } = await requirePartner();
   if (!input || typeof input.client_name !== "string" || typeof input.title !== "string" || typeof input.ntn_strn !== "string" || !input.client_name.trim() || !input.title.trim() || input.ntn_strn.length > 100 || !["RETAINER", "FIXED", "HOURLY"].includes(input.billing_model) || !Number.isFinite(input.budget_hours) || input.budget_hours <= 0 || !Number.isFinite(input.fee_pkr) || input.fee_pkr < 0) return bad("Enter a client, title, billing model, positive budget, and valid fee.");
   const departmentId = profile.role === "HEAD" ? profile.department_id : input.department_id;
@@ -208,11 +235,21 @@ export async function createEngagement(input: { department_id: string | null; cl
   const supabase = await createClient();
   const { data: department } = await supabase.from("departments").select("id").eq("id", departmentId).eq("firm_id", profile.firm_id).maybeSingle();
   if (!department) return bad("That department is not in your firm.");
-  const { error } = await supabase.from("engagements").insert({ firm_id: profile.firm_id, department_id: departmentId, client_name: input.client_name.trim(), ntn_strn: input.ntn_strn.trim(), title: input.title.trim(), billing_model: input.billing_model, budget_hours: input.budget_hours, fee_pkr: input.fee_pkr, status: "ACTIVE" });
+  if (input.due_date && (!/^\d{4}-\d{2}-\d{2}$/.test(input.due_date) || Number.isNaN(Date.parse(input.due_date)))) return bad("Choose a valid filing due date.");
+  if (input.service_type && !["TAX", "AUDIT", "CORPORATE", "OTHER"].includes(input.service_type)) return bad("Choose a valid service type.");
+  const { data: created, error } = await supabase.from("engagements").insert({ firm_id: profile.firm_id, department_id: departmentId, client_name: input.client_name.trim(), ntn_strn: input.ntn_strn.trim(), title: input.title.trim(), billing_model: input.billing_model, budget_hours: input.budget_hours, fee_pkr: input.fee_pkr, status: "ACTIVE", due_date: input.due_date || null, filing_status: "NOT_STARTED" }).select("id").single();
   if (error) return bad(error.message);
+  if (input.auto_seed && created && input.service_type && input.service_type !== "OTHER") {
+    const templates = { TAX: ["Data Collection & Bank Statements", "WHT & Sales Tax Reconciliation", "IRIS Draft Computation", "Partner Review & FBR Filing"], AUDIT: ["Planning & Risk Assessment", "Trial Balance & Ledger Vouching", "Draft Financial Statements", "Audit Sign-Off & Management Letter"], CORPORATE: ["Statutory Register Review", "Form-A / Form-29 Preparation", "SECP eServices Filing"] };
+    const { error: taskError } = await createAdminClient().from("engagement_tasks").insert(templates[input.service_type].map((title) => ({ firm_id: profile.firm_id, engagement_id: created.id, title, task_code: input.service_type, stage: "TO_DO", allocated_hours: 0, due_date: input.due_date || null })));
+    if (taskError) return bad(`Engagement created, but task seeding failed: ${taskError.message}`);
+    revalidateTag(`firm:${profile.firm_id}:tasks`);
+  }
   revalidatePath("/partner/engagements");
   revalidatePath("/accountant/engagements");
   revalidatePath("/accountant/timesheet");
+  revalidateTag(`firm:${profile.firm_id}:engagements`);
+  revalidateTag(`firm:${profile.firm_id}:reports`);
   return { success: true };
 }
 
@@ -226,5 +263,7 @@ export async function setEngagementStatus(id: string, status: EngagementStatus) 
   if (error || !data) return bad(error?.message ?? "That engagement is outside your department.");
   revalidatePath("/partner/engagements");
   revalidatePath("/accountant/engagements");
+  revalidateTag(`firm:${profile.firm_id}:engagements`);
+  revalidateTag(`firm:${profile.firm_id}:reports`);
   return { success: true };
 }

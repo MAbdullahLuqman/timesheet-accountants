@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "seed": "npx tsx scripts/seed-demo.ts",
+    "seed:clean": "npx tsx scripts/seed-demo.ts --clean",
     "lint": "next lint"
   },
   "dependencies": {
@@ -30,6 +32,7 @@
     "@types/react": "^19.1.15",
     "@types/react-dom": "^19.1.9",
     "tailwindcss": "^4.1.14",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
 }

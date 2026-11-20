@@ -14,6 +14,18 @@ export const getCachedActiveEngagements = (firmId: string) => unstable_cache(asy
   return data ?? [];
 }, [firmId, "active-engagements"], { tags: ["firm-engagements", `firm:${firmId}:engagements`], revalidate: 600 })();
 
+export const getCachedEngagements = (firmId: string) => unstable_cache(async () => {
+  const { data, error } = await createAdminClient().from("engagements").select("id,firm_id,department_id,client_name,ntn_strn,title,billing_model,budget_hours,fee_pkr,status").eq("firm_id", firmId).order("client_name");
+  if (error) throw error;
+  return data ?? [];
+}, [firmId, "all-engagements"], { tags: ["firm-engagements", `firm:${firmId}:engagements`], revalidate: 600 })();
+
+export const getCachedEngagementTasks = (firmId: string) => unstable_cache(async () => {
+  const { data, error } = await createAdminClient().from("engagement_tasks").select("id,firm_id,engagement_id,assigned_to,title,task_code,stage,allocated_hours,due_date,created_at").eq("firm_id", firmId).order("created_at");
+  if (error) throw error;
+  return data ?? [];
+}, [firmId, "tasks"], { tags: ["firm-tasks", `firm:${firmId}:tasks`], revalidate: 300 })();
+
 export const getCachedStaffDirectory = (firmId: string) => unstable_cache(async () => {
   const { data, error } = await createAdminClient().from("profiles").select("id,firm_id,department_id,full_name,email,role,is_active,cost_rate_pkr,bill_rate_pkr,weekly_target_hrs").eq("firm_id", firmId).order("full_name");
   if (error) throw error;
@@ -33,6 +45,8 @@ export const getCachedPartnerReportsSummary = (firmId: string) => unstable_cache
   const billed = (entries ?? []).reduce((sum, entry) => sum + Number(entry.billed_hours), 0);
   const billable = (entries ?? []).filter((entry) => entry.billable).reduce((sum, entry) => sum + Number(entry.logged_hours), 0);
   const capacity = (people ?? []).reduce((sum, person) => sum + Number(person.weekly_target_hrs), 0);
-  const margins = (engagements ?? []).map((engagement) => ({ client_name: engagement.client_name, fee_pkr: Number(engagement.fee_pkr), internal_cost_pkr: (entries ?? []).filter((entry) => entry.engagement_id === engagement.id).reduce((sum, entry) => sum + Number(entry.logged_hours) * (rates.get(entry.user_id) ?? 0), 0) }));
+  const costByEngagement = new Map<string, number>();
+  for (const entry of entries ?? []) costByEngagement.set(entry.engagement_id, (costByEngagement.get(entry.engagement_id) ?? 0) + Number(entry.logged_hours) * (rates.get(entry.user_id) ?? 0));
+  const margins = (engagements ?? []).map((engagement) => ({ client_name: engagement.client_name, fee_pkr: Number(engagement.fee_pkr), internal_cost_pkr: costByEngagement.get(engagement.id) ?? 0 }));
   return { total_logged_hours: totalLogged, utilization: capacity ? billable / capacity * 100 : 0, realization: billable ? billed / billable * 100 : 0, margins };
 }, [firmId, "reports"], { tags: ["firm-reports", `firm:${firmId}:reports`], revalidate: 300 })();

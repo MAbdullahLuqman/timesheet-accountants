@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requirePartner } from "@/lib/auth/guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +29,8 @@ export async function createStaffUser(formData: FormData) {
     return { error: profileError.message };
   }
   revalidatePath("/partner/users");
+  revalidateTag(`firm:${profile.firm_id}:staff`);
+  revalidateTag(`firm:${profile.firm_id}:reports`);
   return { success: true };
 }
 
@@ -46,6 +48,8 @@ export async function toggleUserActiveStatus(userId: string, nextActiveState: bo
     return { error: authError.message };
   }
   revalidatePath("/partner/users");
+  revalidateTag(`firm:${profile.firm_id}:staff`);
+  revalidateTag(`firm:${profile.firm_id}:reports`);
   return { success: true };
 }
 
@@ -58,5 +62,6 @@ export async function resetStaffPassword(userId: string, newPassword: string) {
   const { error } = await createAdminClient().auth.admin.updateUserById(userId, { password: newPassword });
   if (error) return { error: error.message };
   revalidatePath("/partner/users");
+  revalidateTag(`firm:${profile.firm_id}:staff`);
   return { success: true };
 }

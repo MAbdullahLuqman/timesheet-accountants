@@ -2,6 +2,8 @@ export type Role = "PARTNER" | "HEAD" | "STAFF";
 export type BillingModel = "RETAINER" | "FIXED" | "HOURLY";
 export type EntryStatus = "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED";
 export type EngagementStatus = "ACTIVE" | "ON_HOLD" | "CLOSED";
+export type TaskStage = "TO_DO" | "IN_PROGRESS" | "REVIEW" | "DONE";
+export type FilingStatus = "NOT_STARTED" | "IN_PROGRESS" | "READY" | "FILED";
 
 export type Department = { id: string; name: string; firm_id: string };
 export type Firm = { id: string; name: string };
@@ -30,6 +32,8 @@ export type Engagement = {
   budget_hours: number;
   fee_pkr: number;
   status: EngagementStatus;
+  due_date?: string | null;
+  filing_status?: FilingStatus;
   department?: Department | null;
   logged_hours?: number;
   billed_hours?: number;
@@ -39,6 +43,7 @@ export type TimeEntry = {
   firm_id: string;
   user_id: string;
   engagement_id: string;
+  task_id?: string | null;
   task_code: string;
   work_date: string;
   logged_hours: number;
@@ -51,3 +56,7 @@ export type TimeEntry = {
   engagement?: Engagement;
   profile?: Pick<Profile, "id" | "full_name" | "email" | "department_id" | "role">;
 };
+export type EngagementTask = { id: string; firm_id: string; engagement_id: string; assigned_to: string | null; title: string; task_code: string; stage: TaskStage; allocated_hours: number; actual_hours?: number; due_date: string | null; created_at: string };
+export type PeriodLock = { id: string; firm_id: string; locked_through_date: string; locked_by: string; reason: string | null; created_at: string };
+export type TimeEntryAudit = { id: string; firm_id: string; time_entry_id: string; actor_id: string; action: "APPROVE" | "BULK_APPROVE" | "WRITEDOWN" | "RETURN"; old_billed_hours: number | null; new_billed_hours: number | null; comment: string | null; created_at: string };
+export type ClientInvoice = { id: string; firm_id: string; engagement_id: string; invoice_number: string; period_start: string; period_end: string; total_billed_hours: number; subtotal_pkr: number; tax_rate_pct: number; total_pkr: number; status: "DRAFT" | "ISSUED" | "PAID"; created_by: string; created_at: string };

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Activity, BarChart3, BriefcaseBusiness, CalendarDays, ChevronLeft, ChevronRight, FileClock, LogOut, Menu, Pause, Play, ShieldCheck, Users } from "lucide-react";
 import { useAppState } from "@/lib/portal-state";
 import { createClient } from "@/lib/supabase/client";
@@ -24,6 +25,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const state = useAppState();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [message, setMessage] = useState("");
@@ -46,6 +48,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   };
   const signOut = async () => {
     await createClient().auth.signOut();
+    queryClient.clear();
     router.replace("/login");
     router.refresh();
   };
