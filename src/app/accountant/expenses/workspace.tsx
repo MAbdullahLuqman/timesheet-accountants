@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition, type FormEvent, type DragEvent } fr
 import { useRouter } from "next/navigation";
 import { Button, Modal, PageHeading, Badge } from "@/components/ui";
 import { formatPKR } from "@/lib/format";
-import { addExpenses, submitExpenseMonth, type ExpenseInput } from "@/lib/supabase/expense-actions";
+import { addExpenses, deleteExpense, submitExpenseMonth, updateExpense, type ExpenseInput } from "@/lib/supabase/expense-actions";
 
 type Row = ExpenseInput & { id: string; status: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED"; review_comment: string | null };
 type Engagement = { id: string; client_name: string; title: string };
@@ -27,11 +27,25 @@ export default function Expenses({ rows, engagements, name, error }: { rows: Row
   const [importOpen, setImportOpen] = useState(false);
   const [notice, setNotice] = useState(error ?? "");
   const [pending, startTransition] = useTransition();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ExpenseInput | null>(null);
   const visible = rows.filter((row) => row.expense_date.startsWith(month));
   const total = visible.reduce((sum, row) => sum + Number(row.amount_pkr), 0);
   const approved = visible.filter((row) => row.status === "APPROVED").reduce((sum, row) => sum + Number(row.amount_pkr), 0);
   const review = visible.filter((row) => row.status === "SUBMITTED").reduce((sum, row) => sum + Number(row.amount_pkr), 0);
   const submit = (task: () => Promise<{ error?: string; success?: boolean }>, onSuccess?: () => void) => startTransition(async () => { const result = await task(); setNotice(result.error ?? "Saved."); if (result.success) { onSuccess?.(); router.refresh(); } });
+  const editRow = (row: Row) => {
+    setEditingId(row.id);
+    setDraft({ expense_date: row.expense_date, location_client: row.location_client, reason: row.reason, amount_pkr: Number(row.amount_pkr), engagement_id: row.engagement_id, billable_to_client: !!row.billable_to_client });
+  };
+  const saveRow = (id: string) => {
+    if (!draft) return;
+    submit(() => updateExpense(id, draft), () => { selectMonth(draft.expense_date.slice(0, 7)); setEditingId(null); setDraft(null); setNotice("Expense saved as draft. Submit the month again for review."); });
+  };
+  const removeRow = (row: Row) => {
+    if (!window.confirm(`Delete this ${row.status.toLowerCase()} expense row?`)) return;
+    submit(() => deleteExpense(row.id), () => { if (editingId === row.id) { setEditingId(null); setDraft(null); } setNotice("Expense row deleted."); });
+  };
   function quickAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -83,7 +97,25 @@ export default function Expenses({ rows, engagements, name, error }: { rows: Row
     <div className="mb-5 grid gap-3 sm:grid-cols-3">{[["Total Claimed", total], ["Approved Payout", approved], ["Pending Review", review]].map(([label, value]) => <div key={label} className="rounded-lg border border-zinc-200 bg-white p-4"><p className="text-xs text-zinc-500">{label}</p><p className="mt-2 text-xl font-semibold">{formatPKR(Number(value))}</p></div>)}</div>
     <form onSubmit={quickAdd} className="mb-5 rounded-lg border border-zinc-200 bg-white p-4"><h2 className="mb-3 text-sm font-semibold">Quick add expense</h2><div className="grid gap-3 md:grid-cols-5"><label className="text-xs">Date<input key={month} name="date" type="date" required defaultValue={`${month}-01`} className="field-input mt-1" /></label><label className="text-xs">Location / Client<input name="location" required maxLength={250} className="field-input mt-1" /></label><label className="text-xs">Reason<input name="reason" required maxLength={500} className="field-input mt-1" /></label><label className="text-xs">Amount (PKR)<input name="amount" type="number" min="0.01" step="0.01" required className="field-input mt-1" /></label><label className="text-xs">Active engagement<select name="engagement" className="field-select mt-1"><option value="">None</option>{engagements.map((e) => <option key={e.id} value={e.id}>{e.client_name} · {e.title}</option>)}</select></label></div><div className="mt-3 flex items-center justify-between"><label className="text-xs"><input name="billable" type="checkbox" className="mr-2" />Billable to Client</label><Button type="submit" variant="primary" disabled={pending}>Add draft row</Button></div></form>
     <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Claim rows</h2><Button variant="primary" disabled={pending || !visible.some((r) => r.status === "DRAFT" || r.status === "REJECTED")} onClick={() => submit(() => submitExpenseMonth(month))}>Submit Month Claim</Button></div>
-    <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white"><table className="w-full min-w-[700px] text-left text-xs"><thead className="bg-zinc-50"><tr>{["Date", "Location / Client", "Reason", "Amount", "Billable", "Status"].map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{visible.map((r) => <tr key={r.id} className="border-t border-zinc-100"><td className="p-3">{r.expense_date}</td><td className="p-3">{r.location_client}</td><td className="p-3">{r.reason}</td><td className="p-3">{formatPKR(Number(r.amount_pkr))}</td><td className="p-3">{r.billable_to_client ? "Yes" : "No"}</td><td className="p-3"><Badge tone={r.status === "APPROVED" ? "green" : r.status === "REJECTED" ? "rose" : "amber"}>{r.status}</Badge>{r.review_comment && <p className="mt-1 text-rose-700">{r.review_comment}</p>}</td></tr>)}{!visible.length && <tr><td colSpan={6} className="p-8 text-center text-zinc-500">No expenses for this month.</td></tr>}</tbody></table></div>
+    <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+      <table className="w-full min-w-[900px] text-left text-xs">
+        <thead className="bg-zinc-50"><tr>{["Date", "Location / Client", "Reason", "Amount", "Engagement", "Billable", "Status", "Actions"].map((h) => <th key={h} className={h === "Actions" ? "sticky right-0 z-10 bg-zinc-50 p-3" : "p-3"}>{h}</th>)}</tr></thead>
+        <tbody>{visible.map((r) => {
+          const editing = editingId === r.id && draft;
+          const field = (change: Partial<ExpenseInput>) => setDraft((current) => current ? { ...current, ...change } : current);
+          return <tr key={r.id} className="border-t border-zinc-100 align-top">
+            <td className="p-3">{editing ? <input aria-label="Expense date" type="date" value={draft.expense_date} onChange={(e) => field({ expense_date: e.target.value })} className="field-input min-w-32" /> : r.expense_date}</td>
+            <td className="p-3">{editing ? <input aria-label="Location or client" value={draft.location_client} maxLength={250} onChange={(e) => field({ location_client: e.target.value })} className="field-input min-w-36" /> : r.location_client}</td>
+            <td className="p-3">{editing ? <input aria-label="Expense reason" value={draft.reason} maxLength={500} onChange={(e) => field({ reason: e.target.value })} className="field-input min-w-36" /> : r.reason}</td>
+            <td className="p-3">{editing ? <input aria-label="Amount in PKR" type="number" min="0.01" step="0.01" value={draft.amount_pkr} onChange={(e) => field({ amount_pkr: Number(e.target.value) })} className="field-input min-w-28" /> : formatPKR(Number(r.amount_pkr))}</td>
+            <td className="p-3">{editing ? <select aria-label="Active engagement" value={draft.engagement_id ?? ""} onChange={(e) => field({ engagement_id: e.target.value || null })} className="field-select min-w-36"><option value="">None</option>{engagements.map((e) => <option key={e.id} value={e.id}>{e.client_name} · {e.title}</option>)}</select> : engagements.find((e) => e.id === r.engagement_id)?.client_name ?? (r.engagement_id ? "Archived engagement" : "—")}</td>
+            <td className="p-3">{editing ? <input aria-label="Billable to client" type="checkbox" checked={!!draft.billable_to_client} onChange={(e) => field({ billable_to_client: e.target.checked })} /> : r.billable_to_client ? "Yes" : "No"}</td>
+            <td className="p-3"><Badge tone={r.status === "APPROVED" ? "green" : r.status === "REJECTED" ? "rose" : "amber"}>{r.status}</Badge>{r.review_comment && <p className="mt-1 text-rose-700">{r.review_comment}</p>}</td>
+            <td className="sticky right-0 z-10 bg-white p-3"><div className="flex flex-wrap gap-1">{editing ? <><Button disabled={pending} onClick={() => saveRow(r.id)}>Save</Button><Button disabled={pending} onClick={() => { setEditingId(null); setDraft(null); }}>Cancel</Button></> : <Button disabled={pending || r.status === "APPROVED"} title={r.status === "APPROVED" ? "Approved claims are locked" : "Edit this expense row"} onClick={() => editRow(r)}>Edit</Button>}<Button variant="danger" disabled={pending || r.status === "APPROVED"} title={r.status === "APPROVED" ? "Approved claims are locked" : "Delete this expense row"} onClick={() => removeRow(r)}>Delete</Button></div></td>
+          </tr>;
+        })}{!visible.length && <tr><td colSpan={8} className="p-8 text-center text-zinc-500">No expenses for this month.</td></tr>}</tbody>
+      </table>
+    </div>
     <Modal open={importOpen} onOpenChange={setImportOpen} title="Import Excel Sheet" description="Choose or drop an .xlsx or .xls travelling sheet."><div className="space-y-4 p-5"><div onDragOver={(e) => e.preventDefault()} onDrop={drop} className="rounded-lg border-2 border-dashed border-zinc-300 p-6 text-center text-xs"><p>Drop an Excel file here</p><input aria-label="Choose Excel file" type="file" accept=".xlsx,.xls" onChange={(e) => void load(e.target.files?.[0])} className="mt-3 max-w-full" /></div><p className="text-xs">{preview.length} rows · {formatPKR(preview.reduce((sum, r) => sum + r.amount_pkr, 0))}</p><div className="max-h-60 overflow-auto"><table className="w-full text-left text-xs"><tbody>{preview.map((r, i) => <tr key={i} className="border-t"><td className="p-2">{r.expense_date}</td><td className="p-2">{r.location_client}</td><td className="p-2">{r.reason}</td><td className="p-2">{formatPKR(r.amount_pkr)}</td></tr>)}</tbody></table></div><Button variant="primary" disabled={pending || !preview.length} onClick={() => submit(() => addExpenses(preview), () => { selectMonth(preview[0].expense_date.slice(0, 7)); setPreview([]); setImportOpen(false); })}>Import All Rows to Draft</Button></div></Modal>
   </>;
 }

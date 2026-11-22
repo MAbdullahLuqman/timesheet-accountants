@@ -169,12 +169,12 @@ export async function deleteDraftTimeEntry(id: string) {
   const { user, profile } = await requireAccountant();
   if (!/^[0-9a-f-]{36}$/i.test(id)) return bad("Invalid timesheet entry.");
   const admin = createAdminClient();
-  const { data: entry, error: lookupError } = await admin.from("time_entries").select("work_date").eq("id", id).eq("firm_id", profile.firm_id).eq("user_id", user.id).eq("status", "DRAFT").maybeSingle();
+  const { data: entry, error: lookupError } = await admin.from("time_entries").select("work_date").eq("id", id).eq("firm_id", profile.firm_id).eq("user_id", user.id).in("status", ["DRAFT", "RETURNED"]).maybeSingle();
   if (lookupError) return bad(lookupError.message);
-  if (!entry) return bad("Only your draft entries can be deleted.");
+  if (!entry) return bad("Only your draft or returned entries can be deleted.");
   const lock = await lockedThrough(profile.firm_id);
   if (lock && entry.work_date <= lock) return bad("Accounting period locked by Managing Partner.");
-  const { data, error } = await admin.from("time_entries").delete().eq("id", id).eq("firm_id", profile.firm_id).eq("user_id", user.id).eq("status", "DRAFT").select("id");
+  const { data, error } = await admin.from("time_entries").delete().eq("id", id).eq("firm_id", profile.firm_id).eq("user_id", user.id).in("status", ["DRAFT", "RETURNED"]).select("id");
   if (error) return bad(error.message);
   if (!data?.length) return bad("This draft is no longer available.");
   revalidatePath("/accountant/timesheet");
@@ -197,6 +197,24 @@ export async function submitWeek(start: string, end: string) {
   revalidatePath("/partner/review");
   revalidateTag(`firm:${profile.firm_id}:reports`);
   return { success: true, count: data.length };
+}
+
+export async function withdrawWeek(start: string, end: string) {
+  const { user, profile } = await requireAccountant();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return bad("Invalid week range.");
+  const lock = await lockedThrough(profile.firm_id);
+  if (lock && start <= lock) return bad("Accounting period locked by Managing Partner.");
+  const admin = createAdminClient();
+  const { data: entries, error: lookupError } = await admin.from("time_entries").select("id,status").eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end);
+  if (lookupError) return bad(lookupError.message);
+  if (entries?.some((entry) => entry.status === "APPROVED" || entry.status === "RETURNED")) return bad("The Partner has reviewed this week. Submitted entries can no longer be withdrawn.");
+  if (!entries?.some((entry) => entry.status === "SUBMITTED")) return bad("This week has no submitted entries to withdraw.");
+  const { data, error } = await admin.from("time_entries").update({ status: "DRAFT" }).eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).eq("status", "SUBMITTED").select("id");
+  if (error) return bad(error.message);
+  revalidatePath("/accountant/timesheet");
+  revalidatePath("/partner/review");
+  revalidateTag(`firm:${profile.firm_id}:reports`);
+  return { success: true, count: data?.length ?? 0 };
 }
 
 export async function logTimerEntry(input: { id: string; engagementId: string; taskCode: string; workDate: string; loggedHours: number }) {
