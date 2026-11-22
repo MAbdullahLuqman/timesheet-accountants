@@ -27,7 +27,7 @@ export const getCachedEngagementTasks = (firmId: string) => unstable_cache(async
 }, [firmId, "tasks"], { tags: ["firm-tasks", `firm:${firmId}:tasks`], revalidate: 300 })();
 
 export const getCachedStaffDirectory = (firmId: string) => unstable_cache(async () => {
-  const { data, error } = await createAdminClient().from("profiles").select("id,firm_id,department_id,full_name,email,role,is_active,cost_rate_pkr,bill_rate_pkr,weekly_target_hrs").eq("firm_id", firmId).order("full_name");
+  const { data, error } = await createAdminClient().from("profiles").select("id,firm_id,department_id,full_name,designation,email,role,is_active,cost_rate_pkr,bill_rate_pkr,weekly_target_hrs").eq("firm_id", firmId).order("full_name");
   if (error) throw error;
   return data ?? [];
 }, [firmId, "staff"], { tags: ["firm-staff", `firm:${firmId}:staff`], revalidate: 600 })();

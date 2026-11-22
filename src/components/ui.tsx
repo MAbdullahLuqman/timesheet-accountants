@@ -9,11 +9,11 @@ import { cn } from "@/lib/cn";
 const buttonStyles = cva("inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-45", {
   variants: {
     variant: {
-      primary: "bg-zinc-900 text-white hover:bg-zinc-700",
-      secondary: "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
-      ghost: "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
+      primary: "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]",
+      secondary: "border border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[#e3eddf]",
+      ghost: "text-[var(--accent)] hover:bg-[var(--accent-soft)]",
       danger: "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50",
-      quiet: "text-zinc-500 hover:text-zinc-900",
+      quiet: "text-[var(--accent)] hover:text-[var(--accent-hover)]",
     },
   },
   defaultVariants: { variant: "secondary" },
@@ -23,7 +23,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 Button.displayName = "Button";
 
 export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "green" | "amber" | "rose" | "blue" }) {
-  const tones = { neutral: "border-zinc-200 bg-zinc-50 text-zinc-600", green: "border-emerald-200 bg-emerald-50 text-emerald-800", amber: "border-amber-200 bg-amber-50 text-amber-800", rose: "border-rose-200 bg-rose-50 text-rose-800", blue: "border-blue-200 bg-blue-50 text-blue-800" };
+  const tones = { neutral: "border-zinc-200 bg-zinc-50 text-zinc-600", green: "border-emerald-200 bg-emerald-50 text-emerald-800", amber: "border-amber-200 bg-amber-50 text-amber-800", rose: "border-rose-200 bg-rose-50 text-rose-800", blue: "border-[var(--accent-line)] bg-[var(--accent-soft)] text-[var(--accent)]" };
   return <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-4", tones[tone])}>{children}</span>;
 }
 
@@ -47,11 +47,11 @@ export function Drawer({ open, onOpenChange, title, description, children, class
   </DialogPrimitive.Root>;
 }
 
-export function Modal({ open, onOpenChange, title, description, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; children: ReactNode }) {
+export function Modal({ open, onOpenChange, title, description, children, className }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; children: ReactNode; className?: string }) {
   return <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="dialog-overlay" />
-      <DialogPrimitive.Content className="dialog-content">
+        <DialogPrimitive.Content className={cn("dialog-content", className)}>
         <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4">
           <div><DialogPrimitive.Title className="text-[15px] font-semibold">{title}</DialogPrimitive.Title>{description && <DialogPrimitive.Description className="mt-1 text-xs text-zinc-500">{description}</DialogPrimitive.Description>}</div>
           <DialogPrimitive.Close asChild><Button variant="ghost" className="-mr-2 -mt-1 size-8 p-0" aria-label="Close dialog"><X size={16} /></Button></DialogPrimitive.Close>

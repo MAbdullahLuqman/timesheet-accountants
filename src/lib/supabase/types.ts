@@ -12,6 +12,7 @@ export type Profile = {
   firm_id: string;
   department_id: string | null;
   full_name: string;
+  designation?: string;
   email: string;
   role: Role;
   is_active: boolean;

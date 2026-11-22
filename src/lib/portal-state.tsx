@@ -32,6 +32,13 @@ const mondayOf = (date: Date) => {
 
 export function AppStateProvider({ children, profile, activeEngagements }: { children: React.ReactNode; profile: AppProfile; activeEngagements: Pick<Engagement, "id" | "client_name" | "title">[] }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [weekRestored, setWeekRestored] = useState(false);
+  useEffect(() => {
+    const saved = localStorage.getItem(`practice-workbench-week:${profile.id}`);
+    if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) && !Number.isNaN(Date.parse(saved))) setWeekStart(mondayOf(new Date(`${saved}T12:00:00`)));
+    setWeekRestored(true);
+  }, [profile.id]);
+  useEffect(() => { if (weekRestored) localStorage.setItem(`practice-workbench-week:${profile.id}`, dateString(weekStart)); }, [profile.id, weekRestored, weekStart]);
   const [selectedDay, setSelectedDay] = useState(() => {
     const day = (new Date().getDay() + 6) % 7;
     return Math.min(day, 5);

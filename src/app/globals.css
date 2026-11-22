@@ -1,12 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
+  --background: #f8f6f0;
   --foreground: #18181b;
   --muted: #71717a;
-  --line: #e4e4e7;
+  --line: #e6e2d9;
   --surface: #ffffff;
-  --accent: #166534;
+  --accent: #203d2d;
+  --accent-hover: #2c503b;
+  --accent-soft: #edf3ea;
+  --accent-line: #b9cebd;
 }
 
 * { box-sizing: border-box; }
@@ -14,9 +17,9 @@ html { min-width: 320px; background: var(--background); }
 body { margin: 0; background: var(--background); color: var(--foreground); font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; }
 button, select { cursor: pointer; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
-::selection { color: #14532d; background: #dcfce7; }
-* { scrollbar-color: #d4d4d8 #fafafa; scrollbar-width: thin; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+::selection { color: var(--accent); background: #dcebdd; }
+* { scrollbar-color: #d4d4d8 #f8f6f0; scrollbar-width: thin; }
 
 .app-frame { min-height: 100vh; }
 .sidebar { width: 240px; flex: 0 0 240px; }
@@ -32,7 +35,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .dialog-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgb(24 24 27 / 32%); }
 .dialog-content { position: fixed; z-index: 51; top: 50%; left: 50%; width: min(520px, calc(100vw - 32px)); max-height: min(90dvh, 760px); overflow-y: auto; transform: translate(-50%, -50%); border: 1px solid var(--line); border-radius: 12px; background: white; box-shadow: 0 20px 60px rgb(24 24 27 / 18%); }
 .field-input, .field-select { margin-top: 6px; display: block; width: 100%; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: white; padding: 0 10px; color: #27272a; font-size: 12px; outline: none; }
-.field-input:focus, .field-select:focus { border-color: #15803d; }
+.field-input:focus, .field-select:focus { border-color: var(--accent); }
 
 @media (max-width: 900px) {
   .sidebar { width: 68px; flex-basis: 68px; }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, BarChart3, BriefcaseBusiness, CalendarDays, ChevronLeft, ChevronRight, FileClock, LogOut, Menu, Pause, Play, ShieldCheck, Users } from "lucide-react";
+import { Activity, BarChart3, BriefcaseBusiness, CalendarDays, ChevronLeft, ChevronRight, FileClock, ReceiptText, ClipboardList, LogOut, Menu, Pause, Play, ShieldCheck, Users } from "lucide-react";
 import { useAppState } from "@/lib/portal-state";
 import { createClient } from "@/lib/supabase/client";
 import { logTimerEntry } from "@/lib/supabase/actions";
@@ -13,15 +13,19 @@ import { Badge, Button, Drawer } from "@/components/ui";
 
 const nav = [
   { href: "/accountant/timesheet", label: "Timesheet", icon: CalendarDays, roles: ["STAFF", "HEAD"] },
+  { href: "/accountant/leaves", label: "Leaves", icon: ClipboardList, roles: ["STAFF", "HEAD"] },
+  { href: "/accountant/expenses", label: "Travelling & Expenses", icon: ReceiptText, roles: ["STAFF", "HEAD"] },
   { href: "/accountant/engagements", label: "Client engagements", icon: BriefcaseBusiness, roles: ["STAFF", "HEAD"] },
   { href: "/partner/review", label: "End-of-week review", icon: ShieldCheck, roles: ["PARTNER"] },
+  { href: "/partner/leaves", label: "Leave Requests", icon: ClipboardList, roles: ["PARTNER"] },
+  { href: "/partner/expenses", label: "Travelling & Expenses", icon: ReceiptText, roles: ["PARTNER"] },
   { href: "/partner/users", label: "User & access control", icon: Users, roles: ["PARTNER"] },
   { href: "/partner/engagements", label: "Clients & engagements", icon: BriefcaseBusiness, roles: ["PARTNER"] },
   { href: "/partner/reports", label: "Firm analytics & export", icon: BarChart3, roles: ["PARTNER"] },
 ];
 const dateString = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-export function AppFrame({ children }: { children: ReactNode }) {
+export function AppFrame({ children, pendingCounts = {} }: { children: ReactNode; pendingCounts?: Record<string, number> }) {
   const pathname = usePathname();
   const state = useAppState();
   const router = useRouter();
@@ -57,14 +61,14 @@ export function AppFrame({ children }: { children: ReactNode }) {
     <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-xs focus:shadow-lg">Skip to main content</a>
     <aside className={cn("sidebar sticky top-0 hidden h-screen flex-col border-r border-zinc-200 bg-white transition-[width] duration-200 md:flex", collapsed && "!w-[68px] !basis-[68px]")}>
       <div className={cn("flex h-14 items-center gap-3 border-b border-zinc-100 px-4", collapsed && "justify-center px-2")}>
-        <div className="grid size-8 shrink-0 place-items-center rounded-md bg-zinc-900 text-white"><Activity size={16} /></div>
+        <div className="grid size-8 shrink-0 place-items-center rounded-md bg-[var(--accent)] text-white"><Activity size={16} /></div>
         {!collapsed && <div className="min-w-0"><p className="truncate text-[12px] font-semibold">{state.profile.firm.name}</p><p className="mt-0.5 text-[10px] text-zinc-500">Practice Workbench</p></div>}
         {!collapsed && <button onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" className="ml-auto rounded p-1 text-zinc-400 hover:bg-zinc-100"><ChevronLeft size={15} /></button>}
         {collapsed && <button onClick={() => setCollapsed(false)} aria-label="Expand sidebar" className="absolute right-[-12px] top-[70px] z-10 grid size-6 place-items-center rounded-full border border-zinc-200 bg-white shadow-sm"><ChevronRight size={13} /></button>}
       </div>
       <div className={cn("px-3 pt-4", collapsed && "px-2")}>
         {!collapsed && <><p className="mb-2 px-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-zinc-400">Workspace</p><p className="mb-3 px-2 text-[10px] leading-4 text-zinc-500">{state.profile.role === "PARTNER" ? "Firm-wide · all departments" : `${state.profile.department?.name ?? "No department"} · ${state.profile.role === "HEAD" ? "department team" : "your own time"}`}</p></>}
-        <nav aria-label="Workspace navigation" className="space-y-1">{visibleNav.map((item) => { const Icon = item.icon; const active = pathname === item.href; return <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined} className={cn("flex h-9 items-center gap-3 rounded-md px-2.5 text-[12px] font-medium", collapsed && "justify-center px-0", active ? "bg-zinc-100 text-zinc-900" : "text-zinc-500 hover:bg-zinc-50")}><Icon size={16} />{!collapsed && <span>{item.label}</span>}</Link>; })}</nav>
+        <nav aria-label="Workspace navigation" className="space-y-1">{visibleNav.map((item) => { const Icon = item.icon; const active = pathname === item.href; return <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined} className={cn("flex h-9 items-center gap-3 rounded-md px-2.5 text-[12px] font-medium", collapsed && "justify-center px-0", active ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-zinc-600 hover:bg-[var(--accent-soft)] hover:text-[var(--accent)]")}><Icon size={16} />{collapsed && !!pendingCounts[item.href] && <span aria-label={`${pendingCounts[item.href]} pending`} className="absolute ml-7 -mt-5 rounded-full bg-amber-100 px-1 text-[9px] font-semibold text-amber-900">{pendingCounts[item.href]}</span>}{!collapsed && <span>{item.label}</span>}{!collapsed && !!pendingCounts[item.href] && <span aria-label={`${pendingCounts[item.href]} pending`} className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">{pendingCounts[item.href]}</span>}</Link>; })}</nav>
       </div>
       <div className="mt-auto border-t border-zinc-100 p-3">
         {!collapsed && <div className="mb-3 rounded-md border border-zinc-200 bg-zinc-50 p-3"><div className="flex items-center gap-2"><FileClock size={13} className="text-zinc-500" /><p className="text-[10px] font-medium">Week closes Saturday</p></div><p className="mt-2 text-[10px] leading-4 text-zinc-500">Submit your time by 6:00 PM to keep billing on schedule.</p></div>}
@@ -88,7 +92,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
     </div>
     <Drawer open={mobileMenu} onOpenChange={setMobileMenu} title="Workspace navigation" description="Choose an area to work in." className="!left-0 !right-auto !w-[280px] !border-l-0 !border-r md:hidden">
       <div className="border-b border-zinc-100 px-5 py-3"><p className="text-[10px] font-medium">{state.profile.full_name} · {state.profile.role}</p><p className="mt-0.5 text-[10px] text-zinc-500">{state.profile.department?.name ?? "Firm-wide"}</p></div>
-      <nav aria-label="Mobile navigation" className="space-y-1 p-4">{visibleNav.map((item) => { const Icon = item.icon; return <Link key={item.href} href={item.href} onClick={() => setMobileMenu(false)} className={cn("flex h-10 items-center gap-3 rounded-md px-3 text-xs", pathname === item.href ? "bg-zinc-100 font-medium text-zinc-900" : "text-zinc-600 hover:bg-zinc-50")}><Icon size={16} />{item.label}</Link>; })}</nav>
+      <nav aria-label="Mobile navigation" className="space-y-1 p-4">{visibleNav.map((item) => { const Icon = item.icon; return <Link key={item.href} href={item.href} onClick={() => setMobileMenu(false)} className={cn("flex h-10 items-center gap-3 rounded-md px-3 text-xs", pathname === item.href ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-zinc-600 hover:bg-[var(--accent-soft)]")}><Icon size={16} />{item.label}{!!pendingCounts[item.href] && <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">{pendingCounts[item.href]}</span>}</Link>; })}</nav>
     </Drawer>
   </div>;
 }

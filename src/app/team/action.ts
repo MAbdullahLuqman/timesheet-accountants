@@ -8,13 +8,14 @@ import { createClient } from "@/lib/supabase/server";
 export async function createStaffUser(formData: FormData) {
   const { profile } = await requirePartner();
   const fullName = String(formData.get("full_name") ?? "").trim();
+  const designation = String(formData.get("designation") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const role = String(formData.get("role") ?? "STAFF");
   const departmentId = String(formData.get("department_id") ?? "") || null;
   const costRate = Number(formData.get("cost_rate_pkr"));
   const billRate = Number(formData.get("bill_rate_pkr"));
-  if (!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 || !["STAFF", "HEAD", "PARTNER"].includes(role) || !Number.isFinite(costRate) || costRate < 0 || !Number.isFinite(billRate) || billRate < 0) return { error: "Enter a name, valid email, password of at least 8 characters, role, and non-negative rates." };
+  if (!fullName || !designation || designation.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 || !["STAFF", "HEAD", "PARTNER"].includes(role) || !Number.isFinite(costRate) || costRate < 0 || !Number.isFinite(billRate) || billRate < 0) return { error: "Enter a name, designation (up to 100 characters), valid email, password of at least 8 characters, role, and non-negative rates." };
   if ((role === "HEAD" || role === "STAFF") && !departmentId) return { error: "Choose a department for staff and heads." };
   const admin = createAdminClient();
   if (departmentId) {
@@ -23,9 +24,10 @@ export async function createStaffUser(formData: FormData) {
   }
   const { data: created, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } });
   if (error || !created.user) return { error: error?.message ?? "Could not create the sign-in account." };
-  const { error: profileError } = await admin.from("profiles").insert({ id: created.user.id, firm_id: profile.firm_id, department_id: role === "PARTNER" ? null : departmentId, full_name: fullName, email, role, is_active: true, cost_rate_pkr: costRate, bill_rate_pkr: billRate, weekly_target_hrs: 45 });
+  const { error: profileError } = await admin.from("profiles").insert({ id: created.user.id, firm_id: profile.firm_id, department_id: role === "PARTNER" ? null : departmentId, full_name: fullName, designation, email, role, is_active: true, cost_rate_pkr: costRate, bill_rate_pkr: billRate, weekly_target_hrs: 45 });
   if (profileError) {
-    await admin.auth.admin.deleteUser(created.user.id);
+    const { error: rollbackError } = await admin.auth.admin.deleteUser(created.user.id);
+    if (rollbackError) return { error: `Profile creation failed: ${profileError.message}. Sign-in account cleanup also failed: ${rollbackError.message}` };
     return { error: profileError.message };
   }
   revalidatePath("/partner/users");
