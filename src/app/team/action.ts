@@ -67,3 +67,15 @@ export async function resetStaffPassword(userId: string, newPassword: string) {
   revalidateTag(`firm:${profile.firm_id}:staff`);
   return { success: true };
 }
+
+export async function updateStaffName(userId: string, value: string) {
+  const { profile } = await requirePartner();
+  if (!/^[0-9a-f-]{36}$/i.test(userId) || typeof value !== "string") return { error: "Choose a user and enter a name." };
+  const fullName = value.trim().replace(/\s+/g, " ");
+  if (fullName.length < 2 || fullName.length > 100) return { error: "Enter a name between 2 and 100 characters." };
+  const { data, error } = await createAdminClient().from("profiles").update({ full_name: fullName }).eq("id", userId).eq("firm_id", profile.firm_id).select("id").maybeSingle();
+  if (error || !data) return { error: error?.message ?? "This user is not in your firm." };
+  revalidatePath("/partner/users");
+  revalidateTag(`firm:${profile.firm_id}:staff`);
+  return { success: true };
+}

@@ -3,9 +3,9 @@
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, KeyRound, Plus, Search, Shield, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, Plus, Search, Shield, Users } from "lucide-react";
 import { Avatar, Badge, Button, Modal, PageHeading } from "@/components/ui";
-import { createStaffUser, resetStaffPassword, toggleUserActiveStatus } from "./action";
+import { createStaffUser, resetStaffPassword, toggleUserActiveStatus, updateStaffName } from "./action";
 import { formatPKR } from "@/lib/format";
 
 type Person = { id: string; department_id: string | null; full_name: string; designation: string | null; email: string; role: "PARTNER" | "HEAD" | "STAFF"; is_active: boolean; cost_rate_pkr: number; bill_rate_pkr: number; weekly_target_hrs: number; department_name: string };
@@ -17,7 +17,8 @@ export default function TeamAdmin({ people, departments }: { people: Person[]; d
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "full_name", desc: false }]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [resetPerson, setResetPerson] = useState<Person | null>(null);
+  const [editingPerson, setEditingPerson] = useState<Person | null>(null);
+  const [accountError, setAccountError] = useState("");
   const [notice, setNotice] = useState("");
   const [createdCredentials, setCreatedCredentials] = useState<{ url: string; email: string; password: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -30,7 +31,7 @@ export default function TeamAdmin({ people, departments }: { people: Person[]; d
     column.accessor("cost_rate_pkr", { header: "Cost / hour", cell: ({ getValue }) => <span className="tabular-nums">{formatPKR(Number(getValue()))}</span> }),
     column.accessor("bill_rate_pkr", { header: "Billing / hour", cell: ({ getValue }) => <span className="tabular-nums">{formatPKR(Number(getValue()))}</span> }),
     column.accessor("weekly_target_hrs", { header: "Weekly target", cell: ({ getValue }) => <span className="tabular-nums">{Number(getValue()).toFixed(1)}h</span> }),
-    column.accessor("is_active", { header: "Access", cell: ({ row, getValue }) => <div className="flex items-center gap-2"><Badge tone={getValue() ? "green" : "rose"}>{getValue() ? "Active" : "Deactivated"}</Badge><Button disabled={pending} onClick={() => act(() => toggleUserActiveStatus(row.original.id, !getValue()), getValue() ? "Account deactivated." : "Account activated.")}>{getValue() ? "Deactivate" : "Activate"}</Button><Button variant="ghost" aria-label={`Reset password for ${row.original.full_name}`} onClick={() => setResetPerson(row.original)}><KeyRound size={13} /></Button></div> }),
+    column.accessor("is_active", { header: "Access", cell: ({ row, getValue }) => <div className="flex items-center gap-2"><Badge tone={getValue() ? "green" : "rose"}>{getValue() ? "Active" : "Deactivated"}</Badge><Button disabled={pending} onClick={() => act(() => toggleUserActiveStatus(row.original.id, !getValue()), getValue() ? "Account deactivated." : "Account activated.")}>{getValue() ? "Deactivate" : "Activate"}</Button><Button variant="ghost" aria-label={`Edit name or password for ${row.original.full_name}`} title="Edit name or password" onClick={() => { setAccountError(""); setEditingPerson(row.original); }}><Pencil size={13} /></Button></div> }),
   ], [pending]);
   const table = useReactTable({ data: rows, columns, state: { sorting }, onSortingChange: setSorting, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
 
@@ -47,13 +48,26 @@ export default function TeamAdmin({ people, departments }: { people: Person[]; d
   }
   function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!resetPerson) return;
+    if (!editingPerson) return;
     const password = String(new FormData(event.currentTarget).get("new_password") ?? "");
-    const person = resetPerson;
+    const person = editingPerson;
+    setAccountError("");
     startTransition(async () => {
       const result = await resetStaffPassword(person.id, password);
-      setNotice(result.error ?? "Password reset.");
-      if (!("error" in result)) { setResetPerson(null); router.refresh(); }
+      if ("error" in result) { setAccountError(result.error ?? "Could not reset password."); return; }
+      setNotice("Password reset."); setEditingPerson(null); router.refresh();
+    });
+  }
+  function submitName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingPerson) return;
+    const name = String(new FormData(event.currentTarget).get("full_name") ?? "");
+    const person = editingPerson;
+    setAccountError("");
+    startTransition(async () => {
+      const result = await updateStaffName(person.id, name);
+      if ("error" in result) { setAccountError(result.error ?? "Could not update name."); return; }
+      setNotice("Name updated."); setEditingPerson(null); router.refresh();
     });
   }
 
@@ -63,7 +77,7 @@ export default function TeamAdmin({ people, departments }: { people: Person[]; d
     {createdCredentials && <section aria-label="New user login credentials" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-xs text-slate-800"><h2 className="font-semibold">Account ready to sign in</h2><p className="mt-2">Login URL: {createdCredentials.url}</p><p>Email: {createdCredentials.email}</p><p>Password: {createdCredentials.password}</p><div className="mt-3 flex gap-2"><Button type="button" onClick={async () => { try { await navigator.clipboard.writeText(`Login URL: ${createdCredentials.url}\nEmail: ${createdCredentials.email}\nPassword: ${createdCredentials.password}`); setNotice("Login credentials copied."); } catch { setNotice("Could not copy credentials. Copy them from this card."); } }}>Copy Login Credentials</Button><Button type="button" onClick={() => setCreatedCredentials(null)}>Dismiss</Button></div></section>}
     <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white"><div className="table-scroll"><table className="w-full min-w-[1000px] border-collapse text-left"><thead className="bg-zinc-50">{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th key={header.id} className="border-b border-zinc-200 px-3 py-2.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500"><button onClick={header.column.getToggleSortingHandler()} className="inline-flex items-center gap-1">{flexRender(header.column.columnDef.header, header.getContext())}{header.column.getIsSorted() === "asc" ? <ArrowUp size={10} /> : header.column.getIsSorted() === "desc" ? <ArrowDown size={10} /> : null}</button></th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.map((row) => <tr key={row.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50/60">{row.getVisibleCells().map((cell) => <td key={cell.id} className="px-3 py-2.5 text-[10px]">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>)}{!rows.length && <tr><td colSpan={7} className="py-12 text-center text-xs text-zinc-500">No users match your search.</td></tr>}</tbody></table></div></section>
     <Modal open={createOpen} onOpenChange={setCreateOpen} title="Create user ID" description="Add a firm login and assign the user’s role, department, and rates."><form onSubmit={submitCreate} className="space-y-3 p-5"><Field label="Full name"><input name="full_name" required className="field-input" autoComplete="name" /></Field><Field label="Designation"><input name="designation" required maxLength={100} placeholder="Audit Manager" className="field-input" /></Field><Field label="Email / Gmail"><input name="email" type="email" required className="field-input" autoComplete="email" /></Field><Field label="Temporary password · minimum 8 characters"><input name="password" type="password" minLength={8} required className="field-input" autoComplete="new-password" /></Field><div className="grid grid-cols-2 gap-3"><Field label="Role"><select name="role" className="field-select"><option value="STAFF">STAFF</option><option value="HEAD">HEAD</option><option value="PARTNER">PARTNER</option></select></Field><Field label="Department"><select name="department_id" className="field-select" defaultValue=""><option value="">None / Partner</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></Field></div><div className="grid grid-cols-2 gap-3"><Field label="Cost rate · PKR / hour"><input name="cost_rate_pkr" type="number" min="0" step="1" defaultValue="0" required className="field-input" /></Field><Field label="Billing rate · PKR / hour"><input name="bill_rate_pkr" type="number" min="0" step="1" defaultValue="0" required className="field-input" /></Field></div><p className="text-[10px] text-zinc-500">Weekly target defaults to 45 hours.</p><div className="flex justify-end gap-2 border-t border-zinc-100 pt-3"><Button type="button" onClick={() => setCreateOpen(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={pending}>Create account</Button></div></form></Modal>
-    <Modal open={!!resetPerson} onOpenChange={(open) => !open && setResetPerson(null)} title="Reset password" description={resetPerson ? `Set a temporary password for ${resetPerson.full_name}.` : undefined}><form onSubmit={submitPassword} className="space-y-4 p-5"><Field label="New password · minimum 8 characters"><input type="password" name="new_password" minLength={8} required autoComplete="new-password" className="field-input" /></Field><div className="flex justify-end gap-2"><Button type="button" onClick={() => setResetPerson(null)}>Cancel</Button><Button type="submit" variant="primary" disabled={pending}>Reset password</Button></div></form></Modal>
+    <Modal open={!!editingPerson} onOpenChange={(open) => !open && setEditingPerson(null)} title="Edit account" description={editingPerson ? `Update ${editingPerson.full_name}’s name or password.` : undefined}><div className="space-y-4 p-5">{accountError && <p role="alert" className="text-xs text-rose-700">{accountError}</p>}<form onSubmit={submitName} className="space-y-3"><Field label="Full name"><input key={editingPerson?.id} name="full_name" defaultValue={editingPerson?.full_name ?? ""} minLength={2} maxLength={100} required autoComplete="name" className="field-input" /></Field><div className="flex justify-end"><Button type="submit" variant="primary" disabled={pending}>Save name</Button></div></form><form onSubmit={submitPassword} className="space-y-3 border-t border-zinc-100 pt-4"><Field label="New password · minimum 8 characters"><input type="password" name="new_password" minLength={8} required autoComplete="new-password" className="field-input" /></Field><div className="flex justify-end"><Button type="submit" disabled={pending}>Reset password</Button></div></form><div className="flex justify-end border-t border-zinc-100 pt-3"><Button type="button" onClick={() => setEditingPerson(null)}>Close</Button></div></div></Modal>
   </>;
 }
 
