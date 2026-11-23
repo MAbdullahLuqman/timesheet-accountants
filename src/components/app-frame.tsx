@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, BarChart3, BriefcaseBusiness, CalendarDays, ChevronLeft, ChevronRight, FileClock, ReceiptText, ClipboardList, LogOut, Menu, Pause, Play, ShieldCheck, Users } from "lucide-react";
+import { Activity, BarChart3, BriefcaseBusiness, CalendarDays, ChevronLeft, ChevronRight, FileClock, ReceiptText, ClipboardList, LogOut, Menu, Pause, Play, Settings2, ShieldCheck, Users } from "lucide-react";
 import { useAppState } from "@/lib/portal-state";
 import { createClient } from "@/lib/supabase/client";
 import { logTimerEntry } from "@/lib/supabase/actions";
+import { updateMyName } from "@/lib/supabase/profile-actions";
 import { cn } from "@/lib/cn";
-import { Badge, Button, Drawer } from "@/components/ui";
+import { Badge, Button, Drawer, Modal } from "@/components/ui";
 
 const nav = [
   { href: "/accountant/timesheet", label: "Timesheet", icon: CalendarDays, roles: ["STAFF", "HEAD"] },
@@ -33,6 +34,10 @@ export function AppFrame({ children, pendingCounts = {} }: { children: ReactNode
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [message, setMessage] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [settingsError, setSettingsError] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const [pendingTimer, setPendingTimer] = useState<ReturnType<typeof state.stopTimer>>(null);
   const visibleNav = nav.filter((item) => item.roles.includes(state.profile.role));
   const end = new Date(state.weekStart.getFullYear(), state.weekStart.getMonth(), state.weekStart.getDate() + 5);
@@ -56,6 +61,16 @@ export function AppFrame({ children, pendingCounts = {} }: { children: ReactNode
     router.replace("/login");
     router.refresh();
   };
+  const saveName = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setSavingName(true); setSettingsError("");
+    try {
+      const result = await updateMyName(nameDraft);
+      if ("error" in result) { setSettingsError(result.error ?? "Could not update your name."); return; }
+      setSettingsOpen(false); setMessage("Name updated."); router.refresh();
+    } catch { setSettingsError("Could not update your name. Try again."); }
+    finally { setSavingName(false); }
+  };
+  const openSettings = () => { setNameDraft(state.profile.full_name); setSettingsError(""); setSettingsOpen(true); setMobileMenu(false); };
 
   return <div className="app-frame flex">
     <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-xs focus:shadow-lg">Skip to main content</a>
@@ -85,6 +100,7 @@ export function AppFrame({ children, pendingCounts = {} }: { children: ReactNode
         <div className="flex min-w-0 items-center gap-1.5">
           <div className="flex items-center gap-1 rounded-md border border-zinc-200 p-0.5"><button aria-label="Previous week" onClick={() => state.shiftWeek(-1)} className="grid size-6 place-items-center rounded text-zinc-500 hover:bg-zinc-100"><ChevronLeft size={14} /></button><span className="min-w-[148px] text-center text-[10px] font-medium tabular-nums">{weekLabel}</span><button aria-label="Next week" onClick={() => state.shiftWeek(1)} className="grid size-6 place-items-center rounded text-zinc-500 hover:bg-zinc-100"><ChevronRight size={14} /></button></div>
           <div className="hidden items-center gap-2 sm:flex"><div className="text-right"><p className="max-w-[150px] truncate text-[10px] font-medium">{state.profile.full_name}</p><p className="text-[9px] text-zinc-500">{state.profile.role}{state.profile.department ? ` · ${state.profile.department.name}` : ""}</p></div><Badge tone={state.profile.role === "PARTNER" ? "blue" : state.profile.role === "HEAD" ? "green" : "neutral"}>{state.profile.role}</Badge></div>
+          <Button variant="ghost" className="size-8 p-0" onClick={openSettings} aria-label="Account settings" title="Account settings"><Settings2 size={16} /></Button>
           <Button variant="ghost" className="size-8 px-2" onClick={signOut} aria-label="Sign out"><LogOut size={15} /><span className="hidden lg:inline">Sign out</span></Button>
         </div>
       </header>
@@ -94,5 +110,6 @@ export function AppFrame({ children, pendingCounts = {} }: { children: ReactNode
       <div className="border-b border-zinc-100 px-5 py-3"><p className="text-[10px] font-medium">{state.profile.full_name} · {state.profile.role}</p><p className="mt-0.5 text-[10px] text-zinc-500">{state.profile.department?.name ?? "Firm-wide"}</p></div>
       <nav aria-label="Mobile navigation" className="space-y-1 p-4">{visibleNav.map((item) => { const Icon = item.icon; return <Link key={item.href} href={item.href} onClick={() => setMobileMenu(false)} className={cn("flex h-10 items-center gap-3 rounded-md px-3 text-xs", pathname === item.href ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]" : "text-zinc-600 hover:bg-[var(--accent-soft)]")}><Icon size={16} />{item.label}{!!pendingCounts[item.href] && <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">{pendingCounts[item.href]}</span>}</Link>; })}</nav>
     </Drawer>
+    <Modal open={settingsOpen} onOpenChange={setSettingsOpen} title="Account settings" description="Change the name shown to your firm."><form onSubmit={saveName} className="space-y-4 p-5"><label className="block text-xs font-medium">Full name<input autoComplete="name" autoFocus required minLength={2} maxLength={100} value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} className="field-input mt-1" /></label>{settingsError && <p role="alert" className="text-xs text-rose-700">{settingsError}</p>}<div className="flex justify-end gap-2"><Button type="button" onClick={() => setSettingsOpen(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={savingName || !nameDraft.trim()}>Save name</Button></div></form></Modal>
   </div>;
 }
