@@ -8,7 +8,8 @@ import type { BillingModel, EngagementStatus } from "@/lib/supabase/types";
 
 export type TimeEntryInput = {
   id: string;
-  engagement_id: string;
+  engagement_id: string | null;
+  company_name?: string | null;
   task_id?: string | null;
   task_code: string;
   work_date: string;
@@ -29,7 +30,7 @@ export async function getTimesheetData(start: string, end: string) {
   const { user, profile } = await requireAccountant();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return { error: "Invalid week range." };
   const supabase = await createClient();
-  const { data, error } = await supabase.from("time_entries").select("id,firm_id,user_id,engagement_id,task_id,task_code,work_date,logged_hours,billed_hours,billable,notes,status,review_comment,reviewed_by").eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).order("work_date");
+  const { data, error } = await supabase.from("time_entries").select("id,firm_id,user_id,engagement_id,company_name,task_id,task_code,work_date,logged_hours,billed_hours,billable,notes,status,review_comment,reviewed_by").eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).order("work_date");
   return error ? bad(error.message) : { data: data ?? [] };
 }
 
@@ -37,7 +38,7 @@ export async function getApprovalsData(start: string, end: string) {
   const { profile } = await requirePartner();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return bad("Invalid week range.");
   const supabase = await createClient();
-  let entriesQuery = supabase.from("time_entries").select("id,firm_id,user_id,engagement_id,task_code,work_date,logged_hours,billed_hours,billable,notes,status,review_comment,reviewed_by").eq("firm_id", profile.firm_id).eq("status", "SUBMITTED").gte("work_date", start).lte("work_date", end);
+  let entriesQuery = supabase.from("time_entries").select("id,firm_id,user_id,engagement_id,company_name,task_code,work_date,logged_hours,billed_hours,billable,notes,status,review_comment,reviewed_by").eq("firm_id", profile.firm_id).eq("status", "SUBMITTED").gte("work_date", start).lte("work_date", end);
   if (profile.role === "HEAD") {
     const [{ data: deptEngagements }, { data: departmentProfiles }] = await Promise.all([
       supabase.from("engagements").select("id").eq("firm_id", profile.firm_id).eq("department_id", profile.department_id),
@@ -51,7 +52,7 @@ export async function getApprovalsData(start: string, end: string) {
   const { data: entries, error } = await entriesQuery.order("work_date");
   if (error) return bad(error.message);
   const userIds = [...new Set((entries ?? []).map((item) => item.user_id))];
-  const engagementIds = [...new Set((entries ?? []).map((item) => item.engagement_id))];
+  const engagementIds = [...new Set((entries ?? []).map((item) => item.engagement_id).filter((id): id is string => !!id))];
   const [{ data: people }, { data: engagements }, { data: departments }] = await Promise.all([
     userIds.length ? supabase.from("profiles").select("id,firm_id,department_id,full_name,email,role").eq("firm_id", profile.firm_id).in("id", userIds) : { data: [] },
     engagementIds.length ? supabase.from("engagements").select("id,firm_id,department_id,client_name,ntn_strn,title,billing_model,budget_hours,fee_pkr,status").eq("firm_id", profile.firm_id).in("id", engagementIds) : { data: [] },
@@ -60,7 +61,7 @@ export async function getApprovalsData(start: string, end: string) {
   const profilesById = new Map((people ?? []).map((item) => [item.id, item]));
   const engagementsById = new Map((engagements ?? []).map((item) => [item.id, item]));
   const departmentsById = new Map((departments ?? []).map((item) => [item.id, item.name]));
-  return { data: (entries ?? []).map((entry) => ({ ...entry, logged_hours: Number(entry.logged_hours), billed_hours: Number(entry.billed_hours), profile: profilesById.get(entry.user_id) ?? null, engagement: { ...engagementsById.get(entry.engagement_id), department_name: departmentsById.get(engagementsById.get(entry.engagement_id)?.department_id ?? "") ?? "Unassigned" } })) };
+  return { data: (entries ?? []).map((entry) => ({ ...entry, logged_hours: Number(entry.logged_hours), billed_hours: Number(entry.billed_hours), profile: profilesById.get(entry.user_id) ?? null, engagement: { ...engagementsById.get(entry.engagement_id ?? ""), client_name: entry.company_name ?? engagementsById.get(entry.engagement_id ?? "")?.client_name, department_name: departmentsById.get(engagementsById.get(entry.engagement_id ?? "")?.department_id ?? "") ?? "Unassigned" } })) };
 }
 
 export async function getReportsData(start: string, end: string) {
@@ -80,7 +81,7 @@ export async function getReportsData(start: string, end: string) {
   const { data: engagements, error: engagementError } = await engagementsQuery;
   if (engagementError) return bad(engagementError.message);
   const engagementIds = (engagements ?? []).map((item) => item.id);
-  let weekQuery = supabase.from("time_entries").select("id,user_id,engagement_id,task_code,work_date,logged_hours,billed_hours,billable,status").eq("firm_id", profile.firm_id).gte("work_date", start).lte("work_date", end);
+  let weekQuery = supabase.from("time_entries").select("id,user_id,engagement_id,company_name,task_code,work_date,logged_hours,billed_hours,billable,status").eq("firm_id", profile.firm_id).gte("work_date", start).lte("work_date", end);
   if (profile.role === "HEAD") weekQuery = scopedUserIds.length && engagementIds.length ? weekQuery.in("user_id", scopedUserIds).in("engagement_id", engagementIds) : weekQuery.eq("user_id", "00000000-0000-0000-0000-000000000000");
   const { data: weekEntries, error: weekError } = await weekQuery;
   if (weekError) return bad(weekError.message);
@@ -126,7 +127,7 @@ export async function getReportsData(start: string, end: string) {
   const csvRows = (weekEntries ?? []).filter((item) => item.status === "APPROVED").map((item) => {
     const engagement = (engagements ?? []).find((row) => row.id === item.engagement_id);
     const person = profileByUser.get(item.user_id);
-    return { entry_id: item.id, work_date: item.work_date, staff: person?.full_name ?? "", department: deptNames.get(person?.department_id ?? "") ?? "", client: String(engagement?.client_name ?? ""), engagement: String(engagement?.title ?? ""), task_code: item.task_code, logged_hours: Number(item.logged_hours), billed_hours: Number(item.billed_hours) };
+    return { entry_id: item.id, work_date: item.work_date, staff: person?.full_name ?? "", department: deptNames.get(person?.department_id ?? "") ?? "", client: String(item.company_name ?? engagement?.client_name ?? ""), engagement: String(engagement?.title ?? ""), task_code: item.task_code, logged_hours: Number(item.logged_hours), billed_hours: Number(item.billed_hours) };
   });
   return { data: { role: profile.role, total_logged_hours: totalLogged, billable_utilization: totalLogged ? billableHours / totalLogged * 100 : 0, realization: billableHours ? billedHours / billableHours * 100 : 0, departments: departmentsData, margins: marginRows, csvRows } };
 }
@@ -138,10 +139,13 @@ export async function saveTimeEntries(items: TimeEntryInput[]) {
   if (lock && items.some((item) => item.work_date <= lock)) return bad("Accounting period locked by Managing Partner.");
   const supabase = await createClient();
   for (const item of items) {
-    if (!/^[0-9a-f-]{36}$/i.test(item.id) || !item.engagement_id || !taskCodes.includes(item.task_code) || !/^\d{4}-\d{2}-\d{2}$/.test(item.work_date) || !quarterHour(item.logged_hours) || typeof item.notes !== "string" || item.notes.length > 1000 || typeof item.billable !== "boolean") return bad("Check the entry, date, task code, notes, and 15-minute hour increments.");
-    const { data: engagement, error: engagementError } = await supabase.from("engagements").select("id,department_id").eq("id", item.engagement_id).eq("firm_id", profile.firm_id).eq("status", "ACTIVE").maybeSingle();
-    if (engagementError || !engagement) return bad("That engagement is outside your firm or inactive.");
+    if (!/^[0-9a-f-]{36}$/i.test(item.id) || item.company_name != null && (typeof item.company_name !== "string" || item.company_name.length > 200) || !item.engagement_id && (typeof item.company_name !== "string" || !item.company_name.trim()) || typeof item.task_code !== "string" || !item.task_code.trim() || item.task_code.length > 150 || !/^\d{4}-\d{2}-\d{2}$/.test(item.work_date) || !quarterHour(item.logged_hours) || typeof item.notes !== "string" || item.notes.length > 1000 || typeof item.billable !== "boolean") return bad("Check the company, task, date, notes, and 15-minute hour increments.");
+    if (item.engagement_id) {
+      const { data: engagement, error: engagementError } = await supabase.from("engagements").select("id,department_id").eq("id", item.engagement_id).eq("firm_id", profile.firm_id).eq("status", "ACTIVE").maybeSingle();
+      if (engagementError || !engagement) return bad("That engagement is outside your firm or inactive.");
+    }
     if (item.task_id) {
+      if (!item.engagement_id) return bad("Choose an engagement for a deliverable task.");
       const { data: task } = await supabase.from("engagement_tasks").select("id").eq("id", item.task_id).eq("engagement_id", item.engagement_id).eq("firm_id", profile.firm_id).neq("stage", "DONE").maybeSingle();
       if (!task) return bad("Choose an open task for this engagement.");
     }
@@ -151,7 +155,7 @@ export async function saveTimeEntries(items: TimeEntryInput[]) {
   const { data: existing, error: existingError } = await supabase.from("time_entries").select("id,user_id,status").eq("firm_id", profile.firm_id).in("id", ids);
   if (existingError) return bad(existingError.message);
   if ((existing ?? []).some((row) => row.user_id !== user.id || !["DRAFT", "RETURNED"].includes(row.status))) return bad("One or more entries are locked or belong to another user.");
-  const records = items.map((item) => ({ id: item.id, firm_id: profile.firm_id, user_id: user.id, engagement_id: item.engagement_id, task_id: item.task_id ?? null, task_code: item.task_code.trim(), work_date: item.work_date, logged_hours: item.logged_hours, billed_hours: 0, billable: item.billable, notes: item.notes.trim(), status: "DRAFT", review_comment: null, reviewed_by: null }));
+  const records = items.map((item) => ({ id: item.id, firm_id: profile.firm_id, user_id: user.id, engagement_id: item.engagement_id, company_name: item.company_name?.trim() || null, task_id: item.task_id ?? null, task_code: item.task_code.trim(), work_date: item.work_date, logged_hours: item.logged_hours, billed_hours: 0, billable: item.billable, notes: item.notes.trim(), status: "DRAFT", review_comment: null, reviewed_by: null }));
   if (records.length) {
     const { error } = await supabase.from("time_entries").upsert(records, { onConflict: "id" });
     if (error) return bad(error.message);
@@ -245,7 +249,7 @@ export async function reviewTimeEntry(input: { id: string; action: "approve" | "
   if (error || !entry) return bad("This entry is no longer awaiting review.");
   if (input.billedHours > Number(entry.logged_hours)) return bad("Billed hours cannot exceed logged hours.");
   const [{ data: engagement }, { data: owner }] = await Promise.all([
-    supabase.from("engagements").select("department_id").eq("id", entry.engagement_id).eq("firm_id", profile.firm_id).maybeSingle(),
+    entry.engagement_id ? supabase.from("engagements").select("department_id").eq("id", entry.engagement_id).eq("firm_id", profile.firm_id).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from("profiles").select("department_id").eq("id", entry.user_id).eq("firm_id", profile.firm_id).maybeSingle(),
   ]);
   if (profile.role === "HEAD" && (!engagement || engagement.department_id !== profile.department_id || owner?.department_id !== profile.department_id)) return bad("This entry is outside your department.");

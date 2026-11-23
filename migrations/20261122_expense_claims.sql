@@ -16,8 +16,12 @@ create table if not exists public.expense_claims (
   created_at timestamptz not null default now()
 );
 alter table public.expense_claims add column if not exists claim_month text;
+alter table public.expense_claims add column if not exists review_comment text;
+alter table public.expense_claims add column if not exists reviewed_by uuid references public.profiles(id);
+alter table public.expense_claims add column if not exists reviewed_at timestamptz;
 update public.expense_claims set claim_month = to_char(expense_date, 'YYYY-MM') where claim_month is null;
 alter table public.expense_claims alter column claim_month set not null;
 create index if not exists expense_claims_firm_month on public.expense_claims (firm_id, expense_date);
 create index if not exists expense_claims_user_month on public.expense_claims (user_id, expense_date);
 alter table public.expense_claims enable row level security;
+notify pgrst, 'reload schema';

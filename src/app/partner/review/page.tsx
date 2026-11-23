@@ -14,7 +14,7 @@ export default async function PartnerReview() {
   const supabase = await createClient();
   const [staff, engagements, departments, { data: entries, error }, { data: audits }, { data: leaves }] = await Promise.all([
     getCachedStaffDirectory(profile.firm_id), getCachedEngagements(profile.firm_id), getCachedDepartments(profile.firm_id),
-    supabase.from("time_entries").select("id,user_id,engagement_id,task_code,work_date,logged_hours,billed_hours,notes,status").eq("firm_id", profile.firm_id).gte("work_date", start).lte("work_date", end).order("work_date"),
+    supabase.from("time_entries").select("id,user_id,engagement_id,company_name,task_code,work_date,logged_hours,billed_hours,notes,status").eq("firm_id", profile.firm_id).gte("work_date", start).lte("work_date", end).order("work_date"),
     supabase.from("time_entry_audits").select("id,time_entry_id,actor_id,action,old_billed_hours,new_billed_hours,comment,created_at").eq("firm_id", profile.firm_id).order("created_at", { ascending: false }).limit(100),
     createAdminClient().from("leave_requests").select("id,user_id,leave_type,start_date,end_date,working_days").eq("firm_id", profile.firm_id).eq("status", "APPROVED").lte("start_date", end).gte("end_date", start),
   ]);

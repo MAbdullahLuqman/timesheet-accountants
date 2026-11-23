@@ -43,7 +43,8 @@ export type TimeEntry = {
   id: string;
   firm_id: string;
   user_id: string;
-  engagement_id: string;
+  engagement_id: string | null;
+  company_name?: string | null;
   task_id?: string | null;
   task_code: string;
   work_date: string;

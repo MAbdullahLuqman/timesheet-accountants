@@ -7,6 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function freezeMonth(month: string) {
   const { user, profile } = await requirePartner();
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return { error: "Choose a valid month." };
+  const currentMonth = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const year = currentMonth.find((part) => part.type === "year")?.value;
+  const monthNumber = currentMonth.find((part) => part.type === "month")?.value;
+  if (month >= `${year}-${monthNumber}`) return { error: "A month can only be frozen after it ends." };
   const through = new Date(`${month}-01T12:00:00Z`);
   through.setUTCMonth(through.getUTCMonth() + 1);
   through.setUTCDate(0);

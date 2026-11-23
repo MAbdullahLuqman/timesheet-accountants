@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const [engagements, tasks, { data: entries, error }] = await Promise.all([
     getCachedActiveEngagements(profile.firm_id),
     getCachedEngagementTasks(profile.firm_id),
-    supabase.from("time_entries").select("id,engagement_id,task_id,task_code,work_date,logged_hours,billable,notes,status,review_comment").eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).order("work_date"),
+    supabase.from("time_entries").select("id,engagement_id,company_name,task_id,task_code,work_date,logged_hours,billable,notes,status,review_comment").eq("firm_id", profile.firm_id).eq("user_id", user.id).gte("work_date", start).lte("work_date", end).order("work_date"),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ entries: entries ?? [], engagements, tasks: tasks.filter((task) => task.stage !== "DONE").map(({ id, engagement_id, title }) => ({ id, engagement_id, title })), weekStart: start, weekEnd: end });
